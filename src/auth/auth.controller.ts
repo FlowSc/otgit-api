@@ -5,6 +5,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto } from './dto/social-login.dto';
 import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
+import { CheckEmailDto, CheckNameDto } from './dto/check-duplicate.dto';
 import { UpdateLocationDto, LocationResponseDto } from './dto/update-location.dto';
 import { Response } from 'express';
 
@@ -46,12 +47,28 @@ export class AuthController {
     }
   }
 
+  // 회원가입 전 전화번호 인증 코드 발송
+  @Post('send-presignup-verification-code')
+  @Throttle({ short: { limit: 1, ttl: 1000 }, medium: { limit: 3, ttl: 60000 } }) // 1초에 1번, 1분에 3번
+  async sendPreSignupVerificationCode(@Body(ValidationPipe) sendVerificationCodeDto: SendVerificationCodeDto) {
+    return this.authService.sendPreSignupVerificationCode(sendVerificationCodeDto);
+  }
+
+  // 회원가입 전 전화번호 인증 코드 검증
+  @Post('verify-presignup-phone')
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 5, ttl: 60000 } }) // 1초에 2번, 1분에 5번
+  async verifyPreSignupPhoneCode(@Body(ValidationPipe) verifyPhoneCodeDto: VerifyPhoneCodeDto) {
+    return this.authService.verifyPreSignupPhoneCode(verifyPhoneCodeDto);
+  }
+
+  // 기존 사용자용 전화번호 인증 코드 발송 (회원가입 후)
   @Post('send-verification-code')
   @Throttle({ short: { limit: 1, ttl: 1000 }, medium: { limit: 3, ttl: 60000 } }) // 1초에 1번, 1분에 3번
   async sendVerificationCode(@Body(ValidationPipe) sendVerificationCodeDto: SendVerificationCodeDto) {
     return this.authService.sendVerificationCode(sendVerificationCodeDto);
   }
 
+  // 기존 사용자용 전화번호 인증 코드 검증 (회원가입 후)
   @Post('verify-phone')
   @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 5, ttl: 60000 } }) // 1초에 2번, 1분에 5번
   async verifyPhoneCode(@Body(ValidationPipe) verifyPhoneCodeDto: VerifyPhoneCodeDto) {
@@ -72,5 +89,19 @@ export class AuthController {
   @Get('location/:userId')
   async getLocation(@Param('userId') userId: string): Promise<LocationResponseDto | null> {
     return this.authService.getUserLocation(userId);
+  }
+
+  // 이메일 중복 검증
+  @Post('check-email')
+  @Throttle({ short: { limit: 3, ttl: 1000 }, medium: { limit: 10, ttl: 60000 } }) // 1초에 3번, 1분에 10번
+  async checkEmailDuplicate(@Body(ValidationPipe) checkEmailDto: CheckEmailDto) {
+    return this.authService.checkEmailDuplicate(checkEmailDto);
+  }
+
+  // 닉네임(이름) 중복 검증
+  @Post('check-name')
+  @Throttle({ short: { limit: 3, ttl: 1000 }, medium: { limit: 10, ttl: 60000 } }) // 1초에 3번, 1분에 10번
+  async checkNameDuplicate(@Body(ValidationPipe) checkNameDto: CheckNameDto) {
+    return this.authService.checkNameDuplicate(checkNameDto);
   }
 }

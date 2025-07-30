@@ -109,3 +109,26 @@ CREATE TRIGGER update_travel_photos_updated_at BEFORE UPDATE
 
 -- CREATE TRIGGER update_travel_photos_geom_trigger BEFORE INSERT OR UPDATE
 --   ON travel_photos FOR EACH ROW EXECUTE FUNCTION update_travel_photos_geom();
+
+-- Phone verification table for secure signup process
+CREATE TABLE phone_verifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL,
+  verification_code VARCHAR(6) NOT NULL,
+  is_verified BOOLEAN DEFAULT FALSE,
+  attempts INTEGER DEFAULT 0,
+  max_attempts INTEGER DEFAULT 3,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  verified_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- Create indexes for phone verifications
+CREATE INDEX idx_phone_verifications_phone ON phone_verifications(phone);
+CREATE INDEX idx_phone_verifications_expires ON phone_verifications(expires_at);
+CREATE INDEX idx_phone_verifications_verified ON phone_verifications(phone, is_verified);
+
+-- Create updated_at trigger for phone_verifications
+CREATE TRIGGER update_phone_verifications_updated_at BEFORE UPDATE
+  ON phone_verifications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

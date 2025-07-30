@@ -1,5 +1,21 @@
 # Otgit API Documentation
 
+## General Endpoints
+
+### 0. 서버 상태 확인 (Health Check)
+```
+GET /
+```
+
+**Response:**
+```
+Hello World!
+```
+
+**특징:**
+- 서버 동작 상태 확인용 기본 엔드포인트
+- 헬스체크나 간단한 연결 테스트에 사용
+
 ## Authentication Endpoints
 
 ### 1. 회원가입 (Register)
@@ -138,10 +154,31 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 
 ### cURL로 테스트
 ```bash
-# 회원가입
+# 회원가입 전 전화번호 인증
+# 1. 인증코드 전송
+curl -X POST http://localhost:3000/auth/send-presignup-verification-code \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"010-1234-5678"}'
+
+# 2. 인증코드 검증
+curl -X POST http://localhost:3000/auth/verify-presignup-phone \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"010-1234-5678","code":"123456"}'
+
+# 3. 회원가입 (인증 완료 후)
 curl -X POST http://localhost:3000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"test123","name":"Test User","phone":"010-1234-5678","gender":"male","age":25}'
+
+# 이메일 중복 검증
+curl -X POST http://localhost:3000/auth/check-email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com"}'
+
+# 닉네임 중복 검증
+curl -X POST http://localhost:3000/auth/check-name \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User"}'
 
 # 로그인  
 curl -X POST http://localhost:3000/auth/login \
@@ -237,14 +274,76 @@ GET /auth/location/:userId
 
 위치 정보가 없는 경우 `null` 반환
 
+### 11. 이메일 중복 검증
+```
+POST /auth/check-email
+```
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response:**
+```json
+{
+  "email": "user@example.com",
+  "is_duplicate": false,
+  "available": true,
+  "message": "Email is available"
+}
+```
+
+**특징:**
+- 회원가입 전 이메일 사용 가능 여부 확인
+- 중복된 이메일이면 `is_duplicate: true`, `available: false`
+- Rate limiting: 1초에 3번, 1분에 10번
+- 유효한 이메일 형식 검증 포함
+
+### 12. 닉네임(이름) 중복 검증
+```
+POST /auth/check-name
+```
+
+**Request Body:**
+```json
+{
+  "name": "사용자"
+}
+```
+
+**Response:**
+```json
+{
+  "name": "사용자",
+  "is_duplicate": true,
+  "available": false,
+  "message": "Name is already in use"
+}
+```
+
+**특징:**
+- 회원가입 전 닉네임 사용 가능 여부 확인
+- 중복된 닉네임이면 `is_duplicate: true`, `available: false`
+- Rate limiting: 1초에 3번, 1분에 10번
+- 빈 문자열 및 null 값 방지
+
 ## 사용 플로우
 
-### 일반 회원가입 플로우:
-1. `POST /auth/register` - 회원가입
-2. `POST /auth/send-verification-code` - 전화번호 인증 코드 전송
-3. `POST /auth/verify-phone` - 전화번호 인증 완료
-4. `POST /auth/login` - 로그인
-5. `POST /auth/update-location` - 현재 위치 업데이트
+### 새로운 회원가입 플로우 (전화번호 인증 선행):
+1. `POST /auth/check-email` - 이메일 중복 검증 (선택적)
+2. `POST /auth/check-name` - 닉네임 중복 검증 (선택적)
+3. `POST /auth/send-presignup-verification-code` - 회원가입 전 전화번호 인증 코드 전송
+4. `POST /auth/verify-presignup-phone` - 회원가입 전 전화번호 인증 완료
+5. `POST /auth/register` - 회원가입 (인증된 번호만 가능)
+6. `POST /auth/login` - 로그인
+7. `POST /auth/update-location` - 현재 위치 업데이트
+
+### 기존 사용자 전화번호 인증 플로우 (회원가입 후):
+1. `POST /auth/send-verification-code` - 전화번호 인증 코드 전송
+2. `POST /auth/verify-phone` - 전화번호 인증 완료
 
 ### 소셜 로그인 플로우:
 1. `POST /auth/social-login` - 소셜 로그인 URL 받기
@@ -820,7 +919,37 @@ POST /likes/accept
 
 ## Chat System Endpoints
 
-### 23. 채팅방 목록 조회
+### 23. 채팅방 생성
+```
+POST /chat/rooms
+```
+
+**Request Body:**
+```json
+{
+  "user1_id": "user1-uuid",
+  "user2_id": "user2-uuid"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "chatroom-uuid",
+  "user1_id": "user1-uuid",
+  "user2_id": "user2-uuid",
+  "created_at": "2025-07-30T12:00:00.000Z",
+  "updated_at": "2025-07-30T12:00:00.000Z",
+  "is_active": true
+}
+```
+
+**특징:**
+- 수동으로 채팅방 생성 가능
+- 중복 채팅방 생성 방지
+- 좋아요 승락 시 자동 생성되는 경우가 대부분
+
+### 24. 채팅방 목록 조회
 ```
 GET /chat/rooms?user_id=uuid&page=1&limit=20
 ```
@@ -868,7 +997,7 @@ GET /chat/rooms?user_id=uuid&page=1&limit=20
 }
 ```
 
-### 24. 메시지 전송
+### 25. 메시지 전송
 ```
 POST /chat/messages
 ```
@@ -906,7 +1035,7 @@ POST /chat/messages
 }
 ```
 
-### 25. 메시지 목록 조회
+### 26. 메시지 목록 조회
 ```
 GET /chat/messages?chat_room_id=uuid&user_id=uuid&page=1&limit=50
 ```
@@ -917,7 +1046,7 @@ GET /chat/messages?chat_room_id=uuid&user_id=uuid&page=1&limit=50
 - `page`: 페이지 번호 (기본값: 1)
 - `limit`: 페이지 크기 (기본값: 50)
 
-### 26. 메시지 읽음 처리
+### 27. 메시지 읽음 처리
 ```
 POST /chat/mark-read
 ```
@@ -938,7 +1067,53 @@ POST /chat/mark-read
 }
 ```
 
+### 28. 온라인 사용자 목록 조회
+```
+GET /chat/online-users
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "online_users": ["user-uuid-1", "user-uuid-2", "user-uuid-3"],
+  "count": 3
+}
+```
+
+**특징:**
+- WebSocket에 연결된 사용자들의 ID 목록 반환
+- 실시간으로 업데이트되는 온라인 상태 확인 가능
+
+### 29. 특정 사용자 온라인 상태 확인
+```
+GET /chat/user/:userId/online
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "user_id": "user-uuid",
+  "is_online": true
+}
+```
+
+**특징:**
+- 특정 사용자의 현재 온라인 상태 확인
+- 채팅 UI에서 상대방 온라인 표시에 활용
+
 ### 사용 예시
+
+#### 채팅방 생성:
+```bash
+curl -X POST http://localhost:3000/chat/rooms \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user1_id": "user1-uuid",
+    "user2_id": "user2-uuid"
+  }'
+```
 
 #### 좋아요 승락:
 ```bash
@@ -967,13 +1142,25 @@ curl -X POST http://localhost:3000/chat/messages \
   }'
 ```
 
+#### 온라인 사용자 확인:
+```bash
+curl -X GET "http://localhost:3000/chat/online-users"
+```
+
+#### 특정 사용자 온라인 상태:
+```bash
+curl -X GET "http://localhost:3000/chat/user/user-uuid/online"
+```
+
 ## 전체 사용 플로우
 
 ### 데이팅 앱 전체 플로우:
 1. **회원가입 & 인증**
-   - `POST /auth/register` - 회원가입
-   - `POST /auth/send-verification-code` - 전화번호 인증 코드 전송
-   - `POST /auth/verify-phone` - 전화번호 인증 완료
+   - `POST /auth/check-email` - 이메일 중복 검증 (선택적)
+   - `POST /auth/check-name` - 닉네임 중복 검증 (선택적)
+   - `POST /auth/send-presignup-verification-code` - 회원가입 전 전화번호 인증 코드 전송
+   - `POST /auth/verify-presignup-phone` - 회원가입 전 전화번호 인증 완료
+   - `POST /auth/register` - 회원가입 (인증된 번호만 가능)
 
 2. **로그인 & 위치 설정**
    - `POST /auth/login` - 로그인 (JWT 토큰 발급)
@@ -1005,6 +1192,302 @@ curl -X POST http://localhost:3000/chat/messages \
 - **자동 매칭**: 상호 좋아요 시 자동으로 매칭 생성
 - **위치 기반**: 여행 사진 위치와 현재 위치 모두 고려
 - **프라이버시**: 공개 설정된 사진만 매칭에 사용
+
+## Push Notifications Endpoints
+
+### 30. FCM 토큰 등록
+```
+POST /notifications/register-token
+```
+
+**Request Body:**
+```json
+{
+  "user_id": "user-uuid",
+  "token": "FCM-token-string",
+  "device_type": "ios", // "ios" | "android" | "web"
+  "device_id": "device-unique-id", // Optional
+  "app_version": "1.0.0" // Optional
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Token registered successfully"
+}
+```
+
+**특징:**
+- 사용자 디바이스의 FCM 토큰을 서버에 등록
+- 디바이스 타입별로 관리 (iOS, Android, Web)
+- 동일 디바이스의 토큰 중복 등록 방지
+- Rate limiting: 1초에 2번만 허용
+
+### 31. FCM 토큰 비활성화
+```
+POST /notifications/deactivate-token
+```
+
+**Request Body:**
+```json
+{
+  "user_id": "user-uuid",
+  "token": "FCM-token-string", // Optional
+  "device_id": "device-unique-id" // Optional
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Token deactivated successfully"
+}
+```
+
+**특징:**
+- 로그아웃 시 푸시 알림 비활성화
+- 토큰 또는 디바이스 ID로 비활성화 가능
+- Rate limiting: 1초에 3번만 허용
+
+### 32. 푸시 알림 전송 (테스트용)
+```
+POST /notifications/send
+```
+
+**Request Body:**
+```json
+{
+  "user_id": "receiver-user-uuid",
+  "title": "새로운 메시지",
+  "body": "김민지님이 메시지를 보냈습니다",
+  "data": {
+    "type": "chat",
+    "chat_room_id": "chatroom-uuid"
+  },
+  "type": "new_message" // "new_message" | "new_match" | "new_like" | "chat_message" | "system"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Notification sent successfully"
+}
+```
+
+**특징:**
+- 특정 사용자에게 푸시 알림 전송
+- 알림 타입별 구분 가능
+- 추가 데이터 전달 가능 (딥링크 등)
+- Rate limiting: 1분에 10번만 허용
+
+### 33. 알림 설정 조회
+```
+GET /notifications/settings/:userId
+```
+
+**Response:**
+```json
+{
+  "user_id": "user-uuid",
+  "new_messages": true,
+  "new_matches": true,
+  "new_likes": true,
+  "chat_messages": true,
+  "marketing": false,
+  "created_at": "2025-07-30T12:00:00.000Z",
+  "updated_at": "2025-07-30T12:00:00.000Z"
+}
+```
+
+**특징:**
+- 사용자별 알림 설정 조회
+- 설정이 없으면 기본값으로 자동 생성
+- 알림 카테고리별 설정 가능
+
+### 34. 알림 설정 업데이트
+```
+POST /notifications/settings
+```
+
+**Request Body:**
+```json
+{
+  "user_id": "user-uuid",
+  "new_messages": true, // Optional
+  "new_matches": true, // Optional
+  "new_likes": false, // Optional
+  "chat_messages": true, // Optional
+  "marketing": false // Optional
+}
+```
+
+**Response:**
+```json
+{
+  "user_id": "user-uuid",
+  "new_messages": true,
+  "new_matches": true,
+  "new_likes": false,
+  "chat_messages": true,
+  "marketing": false,
+  "created_at": "2025-07-30T12:00:00.000Z",
+  "updated_at": "2025-07-30T13:00:00.000Z"
+}
+```
+
+**특징:**
+- 부분 업데이트 가능 (원하는 설정만)
+- upsert 방식으로 처리 (없으면 생성, 있으면 업데이트)
+- Rate limiting: 1초에 5번만 허용
+
+### 35. 사용자 등록 토큰 목록 조회
+```
+GET /notifications/tokens/:userId
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "token-uuid",
+    "user_id": "user-uuid",
+    "token": "FCM-token-string",
+    "device_type": "ios",
+    "device_id": "device-unique-id",
+    "app_version": "1.0.0",
+    "is_active": true,
+    "created_at": "2025-07-30T12:00:00.000Z",
+    "updated_at": "2025-07-30T12:00:00.000Z"
+  }
+]
+```
+
+**특징:**
+- 사용자의 활성화된 모든 토큰 조회
+- 멀티 디바이스 지원
+- 최신 등록 순으로 정렬
+
+### 36. 알림 히스토리 조회
+```
+GET /notifications/history/:userId?page=1&limit=20
+```
+
+**Query Parameters:**
+- `page`: 페이지 번호 (기본값: 1)
+- `limit`: 페이지 크기 (기본값: 20)
+
+**Response:**
+```json
+{
+  "notifications": [
+    {
+      "id": "notification-uuid",
+      "user_id": "user-uuid",
+      "title": "새로운 매칭!",
+      "body": "김민지님과 매칭되었습니다",
+      "data": {
+        "type": "match",
+        "match_id": "match-uuid"
+      },
+      "notification_type": "new_match",
+      "is_sent": true,
+      "sent_at": "2025-07-30T12:00:00.000Z",
+      "error_message": null,
+      "created_at": "2025-07-30T12:00:00.000Z"
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "limit": 20
+}
+```
+
+**특징:**
+- 전송된 알림 이력 확인
+- 성공/실패 여부 및 에러 메시지 포함
+- 페이지네이션 지원
+
+### 37. 특정 토큰 삭제
+```
+DELETE /notifications/tokens/:tokenId
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Token deleted successfully"
+}
+```
+
+**특징:**
+- 특정 토큰을 비활성화 (소프트 삭제)
+- 디바이스 변경이나 앱 재설치 시 사용
+
+### 38. 알림 서비스 상태 확인
+```
+GET /notifications/status
+```
+
+**Response:**
+```json
+{
+  "firebase_initialized": true,
+  "service_status": "running",
+  "timestamp": "2025-07-30T12:00:00.000Z"
+}
+```
+
+**특징:**
+- Firebase 초기화 상태 확인
+- 알림 서비스 정상 작동 여부 확인
+- 서버 헬스체크용
+
+### 사용 예시
+
+#### FCM 토큰 등록:
+```bash
+curl -X POST http://localhost:3000/notifications/register-token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-uuid",
+    "token": "FCM-token-string",
+    "device_type": "ios",
+    "device_id": "iPhone-12345",
+    "app_version": "1.0.0"
+  }'
+```
+
+#### 알림 설정 업데이트:
+```bash
+curl -X POST http://localhost:3000/notifications/settings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-uuid",
+    "new_likes": false,
+    "marketing": true
+  }'
+```
+
+#### 테스트 알림 전송:
+```bash
+curl -X POST http://localhost:3000/notifications/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "receiver-uuid",
+    "title": "새로운 좋아요!",
+    "body": "누군가 당신을 좋아합니다",
+    "type": "new_like",
+    "data": {
+      "sender_id": "sender-uuid"
+    }
+  }'
+```
 
 ## 에러 코드
 - `400 Bad Request`: 잘못된 요청 데이터, 잘못된 인증 코드, 파일 형식 오류, 자기 자신에게 좋아요

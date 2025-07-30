@@ -7,6 +7,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto, SocialProvider } from './dto/social-login.dto';
 import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
+import { CheckEmailDto, CheckNameDto } from './dto/check-duplicate.dto';
 import { UpdateLocationDto, LocationResponseDto } from './dto/update-location.dto';
 import { createSupabaseClient } from '../config/supabase.config';
 
@@ -22,6 +23,25 @@ export class AuthService {
     const { name, email, phone, password, gender, age } = createUserDto;
 
     try {
+      // 인증된 전화번호인지 확인
+      const { data: verifiedPhone, error: verificationError } = await this.supabase
+        .from('phone_verifications')
+        .select('*')
+        .eq('phone', phone)
+        .eq('is_verified', true)
+        .gte('verified_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // 10분 이내
+        .order('verified_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (verificationError && verificationError.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check phone verification');
+      }
+
+      if (!verifiedPhone) {
+        throw new BadRequestException('Phone number must be verified before registration. Please verify your phone number first.');
+      }
+
       // Check if email already exists
       const { data: existingEmail } = await this.supabase
         .from('users')
@@ -33,7 +53,7 @@ export class AuthService {
         throw new ConflictException('Email already exists');
       }
 
-      // Check if phone already exists
+      // Check if phone already exists (double check)
       const { data: existingPhone } = await this.supabase
         .from('users')
         .select('id')
@@ -59,7 +79,7 @@ export class AuthService {
             password_hash: passwordHash,
             gender,
             age,
-            phone_verified: false,
+            phone_verified: true, // 이미 인증되었으므로 true로 설정
             login_type: 'email'
           }
         ])
@@ -273,6 +293,69 @@ export class AuthService {
     throw new InternalServerErrorException('SMS service not configured for production');
   }
 
+  // 회원가입 전 전화번호 인증 코드 발송
+  async sendPreSignupVerificationCode(sendVerificationCodeDto: SendVerificationCodeDto) {
+    const { phone } = sendVerificationCodeDto;
+
+    try {
+      // 전화번호 중복 확인
+      const { data: existingUser, error: userError } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('phone', phone)
+        .single();
+
+      if (userError && userError.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check existing user');
+      }
+
+      if (existingUser) {
+        throw new ConflictException('Phone number is already registered');
+      }
+
+      // 기존 미완료 인증 코드 무효화
+      await this.supabase
+        .from('phone_verifications')
+        .update({ is_verified: true }) // 만료 표시
+        .eq('phone', phone)
+        .eq('is_verified', false);
+
+      // 새 인증 코드 생성
+      const code = this.generateVerificationCode();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5분 후 만료
+
+      // 인증 코드 저장
+      const { error: saveError } = await this.supabase
+        .from('phone_verifications')
+        .insert([
+          {
+            phone,
+            verification_code: code,
+            expires_at: expiresAt.toISOString(),
+          }
+        ]);
+
+      if (saveError) {
+        throw new InternalServerErrorException('Failed to save verification code');
+      }
+
+      // SMS 전송
+      await this.sendSMS(phone, code);
+
+      return {
+        message: 'Verification code sent successfully for signup',
+        expires_in_minutes: 5,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('Send verification code error:', error);
+      throw new InternalServerErrorException('Failed to send verification code');
+    }
+  }
+
+  // 기존 사용자용 전화번호 인증 (회원가입 후)
   async sendVerificationCode(sendVerificationCodeDto: SendVerificationCodeDto) {
     const { phone } = sendVerificationCodeDto;
 
@@ -299,9 +382,9 @@ export class AuthService {
       // 기존 미완료 인증 코드 무효화
       await this.supabase
         .from('phone_verifications')
-        .update({ verified: true }) // 만료 표시
+        .update({ is_verified: true }) // 만료 표시
         .eq('phone', phone)
-        .eq('verified', false);
+        .eq('is_verified', false);
 
       // 새 인증 코드 생성
       const code = this.generateVerificationCode();
@@ -313,7 +396,7 @@ export class AuthService {
         .insert([
           {
             phone,
-            code,
+            verification_code: code,
             expires_at: expiresAt.toISOString(),
           }
         ]);
@@ -338,17 +421,33 @@ export class AuthService {
     }
   }
 
-  async verifyPhoneCode(verifyPhoneCodeDto: VerifyPhoneCodeDto) {
+  // 회원가입 전 전화번호 인증 코드 검증
+  async verifyPreSignupPhoneCode(verifyPhoneCodeDto: VerifyPhoneCodeDto) {
     const { phone, code } = verifyPhoneCodeDto;
 
     try {
+      // 전화번호 중복 확인 (다시 한 번)
+      const { data: existingUser, error: userError } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('phone', phone)
+        .single();
+
+      if (userError && userError.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check existing user');
+      }
+
+      if (existingUser) {
+        throw new ConflictException('Phone number is already registered');
+      }
+
       // 유효한 인증 코드 찾기
       const { data: verification, error: verificationError } = await this.supabase
         .from('phone_verifications')
         .select('*')
         .eq('phone', phone)
-        .eq('code', code)
-        .eq('verified', false)
+        .eq('verification_code', code)
+        .eq('is_verified', false)
         .gte('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
@@ -364,7 +463,7 @@ export class AuthService {
           .from('phone_verifications')
           .select('attempts')
           .eq('phone', phone)
-          .eq('verified', false)
+          .eq('is_verified', false)
           .single();
 
         if (currentVerification) {
@@ -375,7 +474,7 @@ export class AuthService {
               updated_at: new Date().toISOString()
             })
             .eq('phone', phone)
-            .eq('verified', false);
+            .eq('is_verified', false);
         }
 
         throw new BadRequestException('Invalid or expired verification code');
@@ -385,7 +484,76 @@ export class AuthService {
       await this.supabase
         .from('phone_verifications')
         .update({ 
-          verified: true,
+          is_verified: true,
+          verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', verification.id);
+
+      return {
+        message: 'Phone number verified successfully for signup',
+        verified: true,
+        phone,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ConflictException) {
+        throw error;
+      }
+      console.error('Verify pre-signup phone code error:', error);
+      throw new InternalServerErrorException('Phone verification failed');
+    }
+  }
+
+  // 기존 사용자용 전화번호 인증 코드 검증
+  async verifyPhoneCode(verifyPhoneCodeDto: VerifyPhoneCodeDto) {
+    const { phone, code } = verifyPhoneCodeDto;
+
+    try {
+      // 유효한 인증 코드 찾기
+      const { data: verification, error: verificationError } = await this.supabase
+        .from('phone_verifications')
+        .select('*')
+        .eq('phone', phone)
+        .eq('verification_code', code)
+        .eq('is_verified', false)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (verificationError && verificationError.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check verification code');
+      }
+
+      if (!verification) {
+        // 시도 횟수 증가 (있다면)
+        const { data: currentVerification } = await this.supabase
+          .from('phone_verifications')
+          .select('attempts')
+          .eq('phone', phone)
+          .eq('is_verified', false)
+          .single();
+
+        if (currentVerification) {
+          await this.supabase
+            .from('phone_verifications')
+            .update({ 
+              attempts: (currentVerification.attempts || 0) + 1,
+              updated_at: new Date().toISOString()
+            })
+            .eq('phone', phone)
+            .eq('is_verified', false);
+        }
+
+        throw new BadRequestException('Invalid or expired verification code');
+      }
+
+      // 인증 코드를 검증됨으로 표시
+      await this.supabase
+        .from('phone_verifications')
+        .update({ 
+          is_verified: true,
+          verified_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', verification.id);
@@ -492,6 +660,70 @@ export class AuthService {
         throw error;
       }
       throw new InternalServerErrorException('Failed to get user location');
+    }
+  }
+
+  // 이메일 중복 검증
+  async checkEmailDuplicate(checkEmailDto: CheckEmailDto) {
+    const { email } = checkEmailDto;
+
+    try {
+      const { data: existingUser, error } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check email duplicate');
+      }
+
+      const isDuplicate = !!existingUser;
+
+      return {
+        email,
+        is_duplicate: isDuplicate,
+        available: !isDuplicate,
+        message: isDuplicate ? 'Email is already in use' : 'Email is available'
+      };
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      console.error('Check email duplicate error:', error);
+      throw new InternalServerErrorException('Failed to check email availability');
+    }
+  }
+
+  // 닉네임(이름) 중복 검증
+  async checkNameDuplicate(checkNameDto: CheckNameDto) {
+    const { name } = checkNameDto;
+
+    try {
+      const { data: existingUser, error } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('name', name)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check name duplicate');
+      }
+
+      const isDuplicate = !!existingUser;
+
+      return {
+        name,
+        is_duplicate: isDuplicate,
+        available: !isDuplicate,
+        message: isDuplicate ? 'Name is already in use' : 'Name is available'
+      };
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      console.error('Check name duplicate error:', error);
+      throw new InternalServerErrorException('Failed to check name availability');
     }
   }
 }
