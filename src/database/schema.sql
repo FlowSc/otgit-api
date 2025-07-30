@@ -301,9 +301,13 @@ CREATE INDEX idx_notification_settings_user ON notification_settings(user_id);
 CREATE TRIGGER update_notification_settings_updated_at BEFORE UPDATE
   ON notification_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Notification history table to track sent notifications
+-- Drop existing notification_history table and recreate as partitioned (WARNING: DATA LOSS)
+-- Comment out the following lines if you have existing data that needs to be preserved
+DROP TABLE IF EXISTS notification_history CASCADE;
+
+-- Create partitioned notification_history table
 CREATE TABLE notification_history (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title VARCHAR(255) NOT NULL,
   body TEXT NOT NULL,
@@ -312,8 +316,53 @@ CREATE TABLE notification_history (
   is_sent BOOLEAN DEFAULT FALSE,
   sent_at TIMESTAMP WITH TIME ZONE,
   error_message TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
-);
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  
+  -- Check constraint
+  CONSTRAINT check_notification_type_values CHECK (notification_type IN ('new_message', 'new_match', 'new_like', 'chat_message', 'system')),
+  
+  PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
+
+-- Create monthly partitions for notification_history (2025)
+CREATE TABLE notification_history_2025_01 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-01-01 00:00:00+00') TO ('2025-02-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_02 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-02-01 00:00:00+00') TO ('2025-03-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_03 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-03-01 00:00:00+00') TO ('2025-04-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_04 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-04-01 00:00:00+00') TO ('2025-05-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_05 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-05-01 00:00:00+00') TO ('2025-06-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_06 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-06-01 00:00:00+00') TO ('2025-07-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_07 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-07-01 00:00:00+00') TO ('2025-08-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_08 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-08-01 00:00:00+00') TO ('2025-09-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_09 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-09-01 00:00:00+00') TO ('2025-10-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_10 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-10-01 00:00:00+00') TO ('2025-11-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_11 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-11-01 00:00:00+00') TO ('2025-12-01 00:00:00+00');
+
+CREATE TABLE notification_history_2025_12 PARTITION OF notification_history
+    FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00');
+
+-- Create default partition for future dates
+CREATE TABLE notification_history_default PARTITION OF notification_history DEFAULT;
 
 -- Create indexes for notification_history
 CREATE INDEX idx_notification_history_user_created ON notification_history(user_id, created_at);
@@ -475,5 +524,429 @@ BEGIN
   FROM fcm_tokens f
   LEFT JOIN users u ON f.user_id = u.id
   WHERE u.id IS NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- PARTITIONING SETUP FOR HIGH-VOLUME TABLES
+-- ============================================================================
+
+-- Convert messages table to partitioned table (for new installations)
+-- Note: For existing installations, this requires data migration
+-- 
+-- Steps for existing data:
+-- 1. Rename existing messages table: ALTER TABLE messages RENAME TO messages_backup;
+-- 2. Create new partitioned table with same structure
+-- 3. Migrate data from backup to new partitioned table
+-- 4. Drop backup table after verification
+
+-- Drop existing messages table and recreate as partitioned (WARNING: DATA LOSS)
+-- Comment out the following lines if you have existing data that needs to be preserved
+DROP TABLE IF EXISTS messages CASCADE;
+
+-- Create partitioned messages table
+CREATE TABLE messages (
+  id UUID DEFAULT gen_random_uuid(),
+  chat_room_id UUID NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_text TEXT NOT NULL,
+  message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'file')),
+  is_read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  
+  -- Check constraints
+  CONSTRAINT check_message_type CHECK (message_type IN ('text', 'image', 'file')),
+  CONSTRAINT check_message_not_empty CHECK (length(trim(message_text)) > 0),
+  
+  PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
+
+-- Create monthly partitions for messages (2025)
+CREATE TABLE messages_2025_01 PARTITION OF messages
+    FOR VALUES FROM ('2025-01-01 00:00:00+00') TO ('2025-02-01 00:00:00+00');
+
+CREATE TABLE messages_2025_02 PARTITION OF messages
+    FOR VALUES FROM ('2025-02-01 00:00:00+00') TO ('2025-03-01 00:00:00+00');
+
+CREATE TABLE messages_2025_03 PARTITION OF messages
+    FOR VALUES FROM ('2025-03-01 00:00:00+00') TO ('2025-04-01 00:00:00+00');
+
+CREATE TABLE messages_2025_04 PARTITION OF messages
+    FOR VALUES FROM ('2025-04-01 00:00:00+00') TO ('2025-05-01 00:00:00+00');
+
+CREATE TABLE messages_2025_05 PARTITION OF messages
+    FOR VALUES FROM ('2025-05-01 00:00:00+00') TO ('2025-06-01 00:00:00+00');
+
+CREATE TABLE messages_2025_06 PARTITION OF messages
+    FOR VALUES FROM ('2025-06-01 00:00:00+00') TO ('2025-07-01 00:00:00+00');
+
+CREATE TABLE messages_2025_07 PARTITION OF messages
+    FOR VALUES FROM ('2025-07-01 00:00:00+00') TO ('2025-08-01 00:00:00+00');
+
+CREATE TABLE messages_2025_08 PARTITION OF messages
+    FOR VALUES FROM ('2025-08-01 00:00:00+00') TO ('2025-09-01 00:00:00+00');
+
+CREATE TABLE messages_2025_09 PARTITION OF messages
+    FOR VALUES FROM ('2025-09-01 00:00:00+00') TO ('2025-10-01 00:00:00+00');
+
+CREATE TABLE messages_2025_10 PARTITION OF messages
+    FOR VALUES FROM ('2025-10-01 00:00:00+00') TO ('2025-11-01 00:00:00+00');
+
+CREATE TABLE messages_2025_11 PARTITION OF messages
+    FOR VALUES FROM ('2025-11-01 00:00:00+00') TO ('2025-12-01 00:00:00+00');
+
+CREATE TABLE messages_2025_12 PARTITION OF messages
+    FOR VALUES FROM ('2025-12-01 00:00:00+00') TO ('2026-01-01 00:00:00+00');
+
+-- Create default partition for future dates
+CREATE TABLE messages_default PARTITION OF messages DEFAULT;
+
+-- Create indexes on partitioned messages table
+CREATE INDEX idx_messages_chatroom_created ON messages(chat_room_id, created_at);
+CREATE INDEX idx_messages_sender_read ON messages(sender_id, is_read);
+CREATE INDEX idx_messages_chatroom_unread ON messages(chat_room_id, is_read) WHERE is_read = FALSE;
+
+-- Create updated_at trigger for partitioned messages
+CREATE TRIGGER update_messages_updated_at BEFORE UPDATE
+  ON messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- CACHING TABLES FOR PERFORMANCE OPTIMIZATION
+-- ============================================================================
+
+-- Matching candidates pre-computation cache table
+-- This table stores pre-calculated matching candidates to improve performance
+CREATE TABLE matching_candidates_cache (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  searcher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  candidate_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  distance_km DECIMAL(8, 3) NOT NULL,
+  match_score INTEGER DEFAULT 0 CHECK (match_score >= 0 AND match_score <= 100),
+  compatibility_factors JSONB, -- Store factors that contribute to matching score
+  computed_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW() + INTERVAL '24 hours'),
+  is_valid BOOLEAN DEFAULT TRUE,
+  
+  -- Prevent self-matching and ensure uniqueness
+  CONSTRAINT no_self_match CHECK (searcher_id != candidate_id),
+  CONSTRAINT unique_match_candidate UNIQUE (searcher_id, candidate_id)
+);
+
+-- Create indexes for matching_candidates_cache
+CREATE INDEX idx_matching_candidates_searcher ON matching_candidates_cache(searcher_id, expires_at, is_valid);
+CREATE INDEX idx_matching_candidates_score ON matching_candidates_cache(searcher_id, match_score DESC) WHERE is_valid = TRUE;
+CREATE INDEX idx_matching_candidates_distance ON matching_candidates_cache(searcher_id, distance_km) WHERE is_valid = TRUE;
+CREATE INDEX idx_matching_candidates_expires ON matching_candidates_cache(expires_at) WHERE is_valid = TRUE;
+
+-- User search results cache table
+-- This table caches search results to avoid repeated location-based queries
+CREATE TABLE user_search_cache (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  searcher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  search_latitude DECIMAL(10, 8) NOT NULL,
+  search_longitude DECIMAL(11, 8) NOT NULL,
+  search_radius_km INTEGER NOT NULL CHECK (search_radius_km > 0 AND search_radius_km <= 100),
+  gender_filter VARCHAR(10) CHECK (gender_filter IN ('male', 'female')),
+  age_min INTEGER CHECK (age_min >= 18),
+  age_max INTEGER CHECK (age_max <= 100),
+  result_user_ids UUID[] NOT NULL, -- Array of user IDs found in search
+  total_results INTEGER NOT NULL DEFAULT 0,
+  search_hash VARCHAR(64) NOT NULL, -- Hash of search parameters for quick lookup
+  computed_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW() + INTERVAL '1 hour'),
+  is_valid BOOLEAN DEFAULT TRUE,
+  
+  -- Ensure search parameters are valid
+  CONSTRAINT check_age_range CHECK (age_min IS NULL OR age_max IS NULL OR age_min <= age_max)
+);
+
+-- Create indexes for user_search_cache
+CREATE INDEX idx_user_search_cache_searcher ON user_search_cache(searcher_id, expires_at, is_valid);
+CREATE INDEX idx_user_search_cache_hash ON user_search_cache(search_hash, expires_at) WHERE is_valid = TRUE;
+CREATE INDEX idx_user_search_cache_location ON user_search_cache(search_latitude, search_longitude, search_radius_km) WHERE is_valid = TRUE;
+CREATE INDEX idx_user_search_cache_expires ON user_search_cache(expires_at) WHERE is_valid = TRUE;
+
+-- User activity radius cache table
+-- This table caches user's typical activity areas for location-based optimizations
+CREATE TABLE user_activity_radius_cache (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  center_latitude DECIMAL(10, 8) NOT NULL,
+  center_longitude DECIMAL(11, 8) NOT NULL,
+  activity_radius_km DECIMAL(8, 3) NOT NULL CHECK (activity_radius_km > 0),
+  location_count INTEGER NOT NULL DEFAULT 1,
+  first_activity_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  computed_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW() + INTERVAL '7 days'),
+  is_active BOOLEAN DEFAULT TRUE,
+  
+  -- One active radius per user
+  CONSTRAINT unique_active_user_radius UNIQUE (user_id, is_active) DEFERRABLE INITIALLY DEFERRED
+);
+
+-- Create indexes for user_activity_radius_cache
+CREATE INDEX idx_user_activity_radius_user ON user_activity_radius_cache(user_id, is_active);
+CREATE INDEX idx_user_activity_radius_location ON user_activity_radius_cache(center_latitude, center_longitude, activity_radius_km) WHERE is_active = TRUE;
+CREATE INDEX idx_user_activity_radius_expires ON user_activity_radius_cache(expires_at) WHERE is_active = TRUE;
+
+-- ============================================================================
+-- AUTOMATED PARTITION AND CACHE MANAGEMENT FUNCTIONS
+-- ============================================================================
+
+-- Function to automatically create monthly partitions for the next N months
+CREATE OR REPLACE FUNCTION create_monthly_partitions(
+  table_name TEXT,
+  months_ahead INTEGER DEFAULT 3
+)
+RETURNS void AS $$
+DECLARE
+  start_date DATE;
+  end_date DATE;
+  partition_name TEXT;
+  i INTEGER;
+BEGIN
+  -- Start from the first day of next month
+  start_date := DATE_TRUNC('month', CURRENT_DATE + INTERVAL '1 month');
+  
+  FOR i IN 1..months_ahead LOOP
+    end_date := start_date + INTERVAL '1 month';
+    partition_name := table_name || '_' || TO_CHAR(start_date, 'YYYY_MM');
+    
+    -- Check if partition already exists
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class c 
+      JOIN pg_namespace n ON n.oid = c.relnamespace 
+      WHERE c.relname = partition_name AND n.nspname = 'public'
+    ) THEN
+      EXECUTE format('CREATE TABLE %I PARTITION OF %I FOR VALUES FROM (%L) TO (%L)',
+        partition_name, table_name, start_date, end_date);
+      
+      RAISE NOTICE 'Created partition % for table %', partition_name, table_name;
+    END IF;
+    
+    start_date := end_date;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to automatically create partitions for messages and notification_history
+CREATE OR REPLACE FUNCTION maintain_table_partitions()
+RETURNS void AS $$
+BEGIN
+  -- Create partitions for messages table
+  PERFORM create_monthly_partitions('messages', 6);
+  
+  -- Create partitions for notification_history table
+  PERFORM create_monthly_partitions('notification_history', 6);
+  
+  RAISE NOTICE 'Partition maintenance completed';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to drop old partitions (older than specified months)
+CREATE OR REPLACE FUNCTION drop_old_partitions(
+  table_name TEXT,
+  months_to_keep INTEGER DEFAULT 12
+)
+RETURNS void AS $$
+DECLARE
+  cutoff_date DATE;
+  partition_record RECORD;
+  dropped_count INTEGER := 0;
+BEGIN
+  cutoff_date := DATE_TRUNC('month', CURRENT_DATE - (months_to_keep * INTERVAL '1 month'));
+  
+  -- Find and drop old partitions
+  FOR partition_record IN
+    SELECT schemaname, tablename
+    FROM pg_tables
+    WHERE schemaname = 'public'
+    AND tablename LIKE table_name || '_%'
+    AND tablename ~ '\d{4}_\d{2}$'
+    AND TO_DATE(RIGHT(tablename, 7), 'YYYY_MM') < cutoff_date
+  LOOP
+    EXECUTE format('DROP TABLE IF EXISTS %I.%I CASCADE', 
+      partition_record.schemaname, partition_record.tablename);
+    
+    dropped_count := dropped_count + 1;
+    RAISE NOTICE 'Dropped old partition: %', partition_record.tablename;
+  END LOOP;
+  
+  RAISE NOTICE 'Dropped % old partitions for table %', dropped_count, table_name;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to clean up expired cache entries
+CREATE OR REPLACE FUNCTION cleanup_expired_caches()
+RETURNS void AS $$
+DECLARE
+  cleaned_matching INTEGER := 0;
+  cleaned_search INTEGER := 0;
+  cleaned_activity INTEGER := 0;
+BEGIN
+  -- Clean up expired matching candidates cache
+  DELETE FROM matching_candidates_cache 
+  WHERE expires_at < TIMEZONE('utc', NOW()) OR is_valid = FALSE;
+  
+  GET DIAGNOSTICS cleaned_matching = ROW_COUNT;
+  
+  -- Clean up expired user search cache
+  DELETE FROM user_search_cache 
+  WHERE expires_at < TIMEZONE('utc', NOW()) OR is_valid = FALSE;
+  
+  GET DIAGNOSTICS cleaned_search = ROW_COUNT;
+  
+  -- Clean up expired user activity radius cache
+  DELETE FROM user_activity_radius_cache 
+  WHERE expires_at < TIMEZONE('utc', NOW()) OR is_active = FALSE;
+  
+  GET DIAGNOSTICS cleaned_activity = ROW_COUNT;
+  
+  RAISE NOTICE 'Cache cleanup completed - Matching: %, Search: %, Activity: %', 
+    cleaned_matching, cleaned_search, cleaned_activity;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to invalidate user-specific caches (when user data changes)
+CREATE OR REPLACE FUNCTION invalidate_user_caches(target_user_id UUID)
+RETURNS void AS $$
+BEGIN
+  -- Invalidate matching candidates cache for this user
+  UPDATE matching_candidates_cache 
+  SET is_valid = FALSE, expires_at = TIMEZONE('utc', NOW())
+  WHERE searcher_id = target_user_id OR candidate_id = target_user_id;
+  
+  -- Invalidate search cache for this user
+  UPDATE user_search_cache 
+  SET is_valid = FALSE, expires_at = TIMEZONE('utc', NOW())
+  WHERE searcher_id = target_user_id;
+  
+  -- Invalidate activity radius cache for this user
+  UPDATE user_activity_radius_cache 
+  SET is_active = FALSE, expires_at = TIMEZONE('utc', NOW())
+  WHERE user_id = target_user_id;
+  
+  RAISE NOTICE 'Invalidated caches for user: %', target_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to refresh matching candidates cache for a user
+CREATE OR REPLACE FUNCTION refresh_matching_candidates_cache(target_user_id UUID)
+RETURNS void AS $$
+BEGIN
+  -- First invalidate existing cache
+  PERFORM invalidate_user_caches(target_user_id);
+  
+  -- Note: The actual cache population would be handled by the application
+  -- This function just prepares the cache for refresh
+  
+  RAISE NOTICE 'Matching candidates cache prepared for refresh for user: %', target_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- SCHEDULER SETUP FOR AUTOMATED MAINTENANCE
+-- ============================================================================
+
+-- Note: PostgreSQL does not have built-in job scheduling like SQL Server or Oracle.
+-- For production environments, you should use one of the following approaches:
+--
+-- 1. pg_cron extension (if available):
+--    CREATE EXTENSION IF NOT EXISTS pg_cron;
+--    SELECT cron.schedule('partition-maintenance', '0 2 1 * *', 'SELECT maintain_table_partitions();');
+--    SELECT cron.schedule('cache-cleanup', '0 3 * * *', 'SELECT cleanup_expired_caches();');
+--    SELECT cron.schedule('old-partition-cleanup', '0 4 1 * *', 'SELECT drop_old_partitions(''messages'', 12); SELECT drop_old_partitions(''notification_history'', 6);');
+--
+-- 2. External cron job calling psql:
+--    # Add to system crontab (crontab -e):
+--    # 0 2 1 * * psql -d otgit_db -c "SELECT maintain_table_partitions();"
+--    # 0 3 * * * psql -d otgit_db -c "SELECT cleanup_expired_caches();"
+--    # 0 4 1 * * psql -d otgit_db -c "SELECT drop_old_partitions('messages', 12); SELECT drop_old_partitions('notification_history', 6);"
+--
+-- 3. Application-level scheduling (NestJS with @nestjs/schedule):
+--    - Create a scheduled service that calls these functions periodically
+--    - This is the recommended approach for this project
+--
+-- For now, we create a convenience function to run all maintenance tasks manually:
+
+CREATE OR REPLACE FUNCTION run_maintenance_tasks()
+RETURNS void AS $$
+BEGIN
+  -- Create new partitions
+  PERFORM maintain_table_partitions();
+  
+  -- Clean up expired caches
+  PERFORM cleanup_expired_caches();
+  
+  -- Clean up old phone verifications
+  PERFORM cleanup_expired_verifications();
+  
+  -- Clean up old seen_users records
+  PERFORM cleanup_old_seen_users();
+  
+  RAISE NOTICE 'All maintenance tasks completed successfully';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to get maintenance status and statistics
+CREATE OR REPLACE FUNCTION get_maintenance_status()
+RETURNS TABLE(
+  task_name TEXT,
+  status TEXT,
+  details TEXT
+) AS $$
+BEGIN
+  -- Check partition count
+  RETURN QUERY SELECT 
+    'Messages Partitions'::TEXT,
+    'INFO'::TEXT,
+    ('Total: ' || COUNT(*)::TEXT)
+  FROM pg_tables 
+  WHERE schemaname = 'public' AND tablename LIKE 'messages_%';
+  
+  RETURN QUERY SELECT 
+    'Notification History Partitions'::TEXT,
+    'INFO'::TEXT,
+    ('Total: ' || COUNT(*)::TEXT)
+  FROM pg_tables 
+  WHERE schemaname = 'public' AND tablename LIKE 'notification_history_%';
+  
+  -- Check cache sizes
+  RETURN QUERY SELECT 
+    'Matching Candidates Cache'::TEXT,
+    'INFO'::TEXT,
+    ('Valid entries: ' || COUNT(*)::TEXT)
+  FROM matching_candidates_cache 
+  WHERE is_valid = TRUE AND expires_at > TIMEZONE('utc', NOW());
+  
+  RETURN QUERY SELECT 
+    'User Search Cache'::TEXT,
+    'INFO'::TEXT,
+    ('Valid entries: ' || COUNT(*)::TEXT)
+  FROM user_search_cache 
+  WHERE is_valid = TRUE AND expires_at > TIMEZONE('utc', NOW());
+  
+  RETURN QUERY SELECT 
+    'User Activity Radius Cache'::TEXT,
+    'INFO'::TEXT,
+    ('Active entries: ' || COUNT(*)::TEXT)
+  FROM user_activity_radius_cache 
+  WHERE is_active = TRUE AND expires_at > TIMEZONE('utc', NOW());
+  
+  -- Check for expired entries that need cleanup
+  RETURN QUERY SELECT 
+    'Expired Caches'::TEXT,
+    CASE WHEN COUNT(*) > 100 THEN 'WARNING' ELSE 'OK' END::TEXT,
+    ('Expired entries needing cleanup: ' || COUNT(*)::TEXT)
+  FROM (
+    SELECT 1 FROM matching_candidates_cache WHERE is_valid = FALSE OR expires_at <= TIMEZONE('utc', NOW())
+    UNION ALL
+    SELECT 1 FROM user_search_cache WHERE is_valid = FALSE OR expires_at <= TIMEZONE('utc', NOW())
+    UNION ALL
+    SELECT 1 FROM user_activity_radius_cache WHERE is_active = FALSE OR expires_at <= TIMEZONE('utc', NOW())
+  ) expired_entries;
 END;
 $$ LANGUAGE plpgsql;

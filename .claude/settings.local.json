@@ -22,7 +22,8 @@
       "Bash(convert:*)",
       "Bash(ls:*)",
       "Bash(curl:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   },
