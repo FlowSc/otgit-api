@@ -65,15 +65,11 @@ export class NCPSMSService {
         throw new Error('NCP SMS configuration is incomplete');
       }
 
-      // 서비스 ID에서 실제 서비스 이름만 추출 (ncp:sms:kr:357155432756:otgit -> otgit)
-      const serviceName = serviceId.split(':').pop();
-      if (!serviceName) {
-        throw new Error('Invalid NCP SMS Service ID format');
-      }
-
+      // 전체 서비스 ID를 URL 인코딩
+      const encodedServiceId = encodeURIComponent(serviceId);
       const timestamp = Date.now().toString();
       const method = 'POST';
-      const url = `${this.uri}/${serviceName}/messages`;
+      const url = `${this.uri}/${encodedServiceId}/messages`;
 
       const signature = this.makeSignature(
         method,
@@ -97,7 +93,7 @@ export class NCPSMSService {
       };
 
       if (type === 'LMS' && message.length > 80) {
-        requestBody.subject = '인증번호 안내';
+        requestBody.content = '인증번호 안내';
       }
 
       const response = await axios.post(

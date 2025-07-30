@@ -37,12 +37,12 @@ async function testSMS() {
 
     const baseUrl = 'https://sens.apigw.ntruss.com';
     
-    // 다양한 URL 형식 시도
-    const serviceName = config.serviceId.split(':').pop(); // otgit
+    // 전체 서비스 ID를 URL 인코딩
     const fullServiceId = config.serviceId; // ncp:sms:kr:357155432756:otgit
-    
-    // 첫 번째 시도: 서비스 이름만 사용
-    let uri = `/sms/v2/services/${serviceName}/messages`;
+    const encodedServiceId = encodeURIComponent(fullServiceId);
+    let uri = `/sms/v2/services/${encodedServiceId}/messages`;
+    console.log('🔗 원본 서비스 ID:', fullServiceId);
+    console.log('🔗 인코딩된 서비스 ID:', encodedServiceId);
     console.log('🔗 시도할 URL:', `${baseUrl}${uri}`);
     const timestamp = Date.now().toString();
     const method = 'POST';
