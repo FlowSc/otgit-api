@@ -24,6 +24,7 @@ import {
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { createSupabaseClient } from '../config/supabase.config';
 import { TicketsSchedulerService } from '../tickets/tickets-scheduler.service';
+import { NCPSMSService } from '../config/ncp-sms.config';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +33,7 @@ export class AuthService {
   constructor(
     private configService: ConfigService,
     private ticketsSchedulerService: TicketsSchedulerService,
+    private ncpSmsService: NCPSMSService,
   ) {
     this.supabase = createSupabaseClient(this.configService);
   }
@@ -335,19 +337,46 @@ export class AuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  // SMS 전송 (개발 환경에서는 모킹)
+  // NCP SMS를 통한 인증번호 전송
   private async sendSMS(phone: string, code: string): Promise<void> {
-    // 개발 환경에서는 콘솔에 로그 출력
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`📱 SMS to ${phone}: Your verification code is ${code}`);
-      return;
-    }
+    try {
+      // 개발 환경에서는 콘솔 로그와 함께 실제 SMS도 전송
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`📱 [DEV] SMS to ${phone}: Your verification code is ${code}`);
+      }
 
-    // TODO: 실제 SMS 서비스 연동 (예: AWS SNS, Twilio 등)
-    // await smsService.send(phone, `인증 코드: ${code}`);
-    throw new InternalServerErrorException(
-      'SMS service not configured for production',
-    );
+      // 전화번호 형식 검증
+      if (!this.ncpSmsService.isValidPhoneNumber(phone)) {
+        throw new BadRequestException('Invalid phone number format');
+      }
+
+      // 전화번호 정규화
+      const normalizedPhone = this.ncpSmsService.normalizePhoneNumber(phone);
+      
+      // NCP SMS API를 통해 인증번호 전송
+      const result = await this.ncpSmsService.sendVerificationCode(normalizedPhone, code);
+      
+      console.log(`✅ SMS sent successfully to ${normalizedPhone}:`, {
+        requestId: result.requestId,
+        statusCode: result.statusCode,
+        statusName: result.statusName,
+      });
+    } catch (error) {
+      console.error('SMS send error:', error);
+      
+      // NCP API 에러인 경우 구체적인 에러 메시지 제공
+      if (error.message?.includes('NCP SMS API Error')) {
+        throw new InternalServerErrorException(`SMS 전송 실패: ${error.message}`);
+      }
+      
+      // 전화번호 형식 오류
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // 기타 에러
+      throw new InternalServerErrorException('SMS 전송 중 오류가 발생했습니다.');
+    }
   }
 
   // 회원가입 전 전화번호 인증 코드 발송

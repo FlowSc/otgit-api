@@ -25,7 +25,10 @@
       "Bash(npm run build:*)",
       "Bash(find:*)",
       "Bash(npm ls:*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(export NCP_ACCESS_KEY=\"ncp_iam_BPAMKRLllPoLOpaNSUVF\")",
+      "Bash(export NCP_SECRET_KEY=\"ncp_iam_BPKMKRCaxbTJVGZI2Cc6JIySkvHgEnEoY9\")",
+      "Bash(export NCP_SMS_FROM_NUMBER=\"01012345678\")"
     ],
     "deny": []
   },

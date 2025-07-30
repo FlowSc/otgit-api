@@ -69,6 +69,12 @@ FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 # JWT Configuration
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=24h
+
+# NCP SMS Configuration
+NCP_ACCESS_KEY=your_ncp_access_key
+NCP_SECRET_KEY=your_ncp_secret_key
+NCP_SMS_SERVICE_ID=ncp:sms:kr:357155432756:otgit
+NCP_SMS_FROM_NUMBER=01012345678
 ```
 
 ## Key Features
@@ -136,6 +142,17 @@ node test-socket-client.js
 node generate-test-token.js
 ```
 
+### 5. NCP SMS 테스트
+```bash
+# 환경변수 설정 후
+export NCP_ACCESS_KEY="your_access_key"
+export NCP_SECRET_KEY="your_secret_key"  
+export NCP_SMS_FROM_NUMBER="01012345678"
+
+# SMS 전송 테스트
+node test-ncp-sms.js
+```
+
 ## Troubleshooting
 
 ### 1. 포트 3000 사용 중 오류
@@ -154,6 +171,11 @@ lsof -ti:3000 | xargs kill -9
 ### 4. 파일 업로드 오류
 - Supabase Storage 버킷 권한 확인
 - 파일 크기/형식 제한 확인
+
+### 5. NCP SMS 전송 오류
+- NCP_ACCESS_KEY, NCP_SECRET_KEY 확인
+- SMS 서비스 활성화 및 발신번호 등록 확인
+- 서비스 ID 형식 확인: ncp:sms:kr:357155432756:otgit
 
 ## Code Style Guidelines
 - ESLint + Prettier 설정 준수
