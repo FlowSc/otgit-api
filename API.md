@@ -255,6 +255,12 @@ GET /auth/location/:userId
 
 ## Photo Upload Endpoints
 
+**📦 Storage Structure:**
+- **프로필 사진**: `profile-photos` 버킷 (최대 5MB, JPEG/PNG/WebP)
+- **여행 사진**: `travel-photos` 버킷 (최대 10MB, JPEG/PNG/GIF/WebP)
+
+각 버킷은 독립적인 정책과 최적화를 가지고 있어 보안성과 성능을 향상시킵니다.
+
 ### 7. 프로필 사진 업로드
 ```
 POST /photos/profile
@@ -262,7 +268,7 @@ POST /photos/profile
 
 **Request:**
 - Content-Type: `multipart/form-data`
-- `file`: 이미지 파일 (JPEG, PNG, GIF, WebP - 최대 10MB)
+- `file`: 이미지 파일 (JPEG, PNG, WebP - 최대 5MB)
 - `user_id`: 사용자 ID (임시, 나중에 JWT로 대체)
 
 **Response:**
@@ -270,11 +276,11 @@ POST /photos/profile
 {
   "id": "uuid",
   "user_id": "user-uuid",
-  "file_url": "https://your-project.supabase.co/storage/v1/object/public/photos/profile-photos/...",
+  "file_url": "https://your-project.supabase.co/storage/v1/object/public/profile-photos/user-id/timestamp-filename",
   "file_name": "profile.jpg",
   "file_size": 524288,
   "mime_type": "image/jpeg",
-  "storage_path": "profile-photos/user-id/timestamp-filename",
+  "storage_path": "user-id/timestamp-filename",
   "is_active": true,
   "created_at": "2025-07-30T12:00:00.000Z",
   "updated_at": "2025-07-30T12:00:00.000Z"
@@ -335,7 +341,7 @@ POST /photos/travel
 {
   "id": "uuid",
   "user_id": "user-uuid",
-  "file_url": "https://your-project.supabase.co/storage/v1/object/public/photos/travel-photos/...",
+  "file_url": "https://your-project.supabase.co/storage/v1/object/public/travel-photos/user-id/timestamp-filename",
   "file_name": "travel.jpg",
   "file_size": 1048576,
   "mime_type": "image/jpeg",

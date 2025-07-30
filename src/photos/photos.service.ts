@@ -31,10 +31,10 @@ export class PhotosService {
         throw new BadRequestException('File must be an image');
       }
 
-      // Upload file to Supabase Storage
-      const fileName = `profile-photos/${userId}/${Date.now()}-${file.originalname}`;
+      // Upload file to Supabase Storage (profile-photos bucket)
+      const fileName = `${userId}/${Date.now()}-${file.originalname}`;
       const { data: uploadData, error: uploadError } = await this.supabase.storage
-        .from('photos')
+        .from('profile-photos')
         .upload(fileName, file.buffer, {
           contentType: file.mimetype,
           upsert: false
@@ -46,7 +46,7 @@ export class PhotosService {
 
       // Get public URL
       const { data: { publicUrl } } = this.supabase.storage
-        .from('photos')
+        .from('profile-photos')
         .getPublicUrl(fileName);
 
       // Deactivate existing profile photo
@@ -75,7 +75,7 @@ export class PhotosService {
 
       if (error) {
         // Clean up uploaded file if database save fails
-        await this.supabase.storage.from('photos').remove([fileName]);
+        await this.supabase.storage.from('profile-photos').remove([fileName]);
         throw new InternalServerErrorException('Failed to save photo information');
       }
 
@@ -119,7 +119,7 @@ export class PhotosService {
 
       // Delete from storage
       if (existingPhoto.storage_path) {
-        await this.supabase.storage.from('photos').remove([existingPhoto.storage_path]);
+        await this.supabase.storage.from('profile-photos').remove([existingPhoto.storage_path]);
       }
 
       // Delete from database
@@ -154,10 +154,10 @@ export class PhotosService {
         throw new BadRequestException('File must be an image');
       }
 
-      // Upload file to Supabase Storage
-      const fileName = `travel-photos/${userId}/${Date.now()}-${file.originalname}`;
+      // Upload file to Supabase Storage (travel-photos bucket)
+      const fileName = `${userId}/${Date.now()}-${file.originalname}`;
       const { data: uploadData, error: uploadError } = await this.supabase.storage
-        .from('photos')
+        .from('travel-photos')
         .upload(fileName, file.buffer, {
           contentType: file.mimetype,
           upsert: false
@@ -169,7 +169,7 @@ export class PhotosService {
 
       // Get public URL
       const { data: { publicUrl } } = this.supabase.storage
-        .from('photos')
+        .from('travel-photos')
         .getPublicUrl(fileName);
 
       // Save photo info to database
@@ -197,7 +197,7 @@ export class PhotosService {
 
       if (error) {
         // Clean up uploaded file if database save fails
-        await this.supabase.storage.from('photos').remove([fileName]);
+        await this.supabase.storage.from('travel-photos').remove([fileName]);
         throw new InternalServerErrorException('Failed to save photo information');
       }
 
