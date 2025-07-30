@@ -22,7 +22,9 @@ export class FirebaseService {
 
       const serviceAccountKey = this.getServiceAccountKey();
       if (!serviceAccountKey) {
-        this.logger.warn('Firebase configuration not found, Firebase services will be disabled');
+        this.logger.warn(
+          'Firebase configuration not found, Firebase services will be disabled',
+        );
         return;
       }
 
@@ -38,14 +40,21 @@ export class FirebaseService {
   }
 
   private getServiceAccountKey(): any {
-    const serviceAccountPath = this.configService.get<string>('FIREBASE_SERVICE_ACCOUNT_PATH');
-    const serviceAccountJson = this.configService.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON');
+    const serviceAccountPath = this.configService.get<string>(
+      'FIREBASE_SERVICE_ACCOUNT_PATH',
+    );
+    const serviceAccountJson = this.configService.get<string>(
+      'FIREBASE_SERVICE_ACCOUNT_JSON',
+    );
 
     if (serviceAccountJson) {
       try {
         return JSON.parse(serviceAccountJson);
       } catch (error) {
-        this.logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:', error);
+        this.logger.error(
+          'Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:',
+          error,
+        );
         return null;
       }
     }
@@ -55,7 +64,10 @@ export class FirebaseService {
         const fullPath = path.resolve(serviceAccountPath);
         return require(fullPath);
       } catch (error) {
-        this.logger.error(`Failed to load service account from ${serviceAccountPath}:`, error);
+        this.logger.error(
+          `Failed to load service account from ${serviceAccountPath}:`,
+          error,
+        );
         return null;
       }
     }

@@ -1,10 +1,10 @@
-import { 
-  IsOptional, 
-  IsString, 
+import {
+  IsOptional,
+  IsString,
   IsBoolean,
   IsDateString,
   MaxLength,
-  IsNumber
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 

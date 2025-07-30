@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Body, Query, Param, ValidationPipe, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  Param,
+  ValidationPipe,
+  Delete,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { NotificationsService } from './notifications.service';
@@ -27,7 +36,9 @@ export class NotificationsController {
   // FCM 토큰 등록
   @Post('register-token')
   @Throttle({ short: { limit: 2, ttl: 1000 } }) // 1초에 2번만 허용
-  async registerToken(@Body(ValidationPipe) registerTokenDto: RegisterTokenDto) {
+  async registerToken(
+    @Body(ValidationPipe) registerTokenDto: RegisterTokenDto,
+  ) {
     const success = await this.notificationsService.registerToken(
       registerTokenDto.user_id,
       registerTokenDto.token,
@@ -38,14 +49,18 @@ export class NotificationsController {
 
     return {
       success,
-      message: success ? 'Token registered successfully' : 'Failed to register token',
+      message: success
+        ? 'Token registered successfully'
+        : 'Failed to register token',
     };
   }
 
   // FCM 토큰 비활성화
   @Post('deactivate-token')
   @Throttle({ short: { limit: 3, ttl: 1000 } }) // 1초에 3번만 허용
-  async deactivateToken(@Body(ValidationPipe) deactivateTokenDto: DeactivateTokenDto) {
+  async deactivateToken(
+    @Body(ValidationPipe) deactivateTokenDto: DeactivateTokenDto,
+  ) {
     const success = await this.notificationsService.deactivateToken(
       deactivateTokenDto.user_id,
       deactivateTokenDto.token,
@@ -54,14 +69,18 @@ export class NotificationsController {
 
     return {
       success,
-      message: success ? 'Token deactivated successfully' : 'Failed to deactivate token',
+      message: success
+        ? 'Token deactivated successfully'
+        : 'Failed to deactivate token',
     };
   }
 
   // 푸시 알림 전송 (테스트용)
   @Post('send')
   @Throttle({ medium: { limit: 10, ttl: 60000 } }) // 1분에 10번만 허용
-  async sendNotification(@Body(ValidationPipe) sendNotificationDto: SendNotificationDto) {
+  async sendNotification(
+    @Body(ValidationPipe) sendNotificationDto: SendNotificationDto,
+  ) {
     const success = await this.notificationsService.sendPushNotification({
       userId: sendNotificationDto.user_id,
       title: sendNotificationDto.title,
@@ -72,13 +91,17 @@ export class NotificationsController {
 
     return {
       success,
-      message: success ? 'Notification sent successfully' : 'Failed to send notification',
+      message: success
+        ? 'Notification sent successfully'
+        : 'Failed to send notification',
     };
   }
 
   // 알림 설정 조회
   @Get('settings/:userId')
-  async getNotificationSettings(@Param('userId') userId: string): Promise<NotificationSettingsResponseDto> {
+  async getNotificationSettings(
+    @Param('userId') userId: string,
+  ): Promise<NotificationSettingsResponseDto> {
     try {
       const { data: settings, error } = await this.supabase
         .from('notification_settings')
@@ -88,8 +111,11 @@ export class NotificationsController {
 
       if (error) {
         console.error('Error fetching notification settings:', error);
-        if (error.code !== 'PGRST116') { // PGRST116 = not found
-          throw new Error('Failed to fetch notification settings: ' + error.message);
+        if (error.code !== 'PGRST116') {
+          // PGRST116 = not found
+          throw new Error(
+            'Failed to fetch notification settings: ' + error.message,
+          );
         }
       }
 
@@ -112,7 +138,10 @@ export class NotificationsController {
 
         if (insertError) {
           console.error('Error creating default settings:', insertError);
-          throw new Error('Failed to create default notification settings: ' + insertError.message);
+          throw new Error(
+            'Failed to create default notification settings: ' +
+              insertError.message,
+          );
         }
 
         return newSettings;
@@ -131,13 +160,17 @@ export class NotificationsController {
   async updateNotificationSettings(
     @Body(ValidationPipe) updateSettingsDto: UpdateNotificationSettingsDto,
   ): Promise<NotificationSettingsResponseDto> {
-
     const updateData: any = {};
-    if (updateSettingsDto.new_messages !== undefined) updateData.new_messages = updateSettingsDto.new_messages;
-    if (updateSettingsDto.new_matches !== undefined) updateData.new_matches = updateSettingsDto.new_matches;
-    if (updateSettingsDto.new_likes !== undefined) updateData.new_likes = updateSettingsDto.new_likes;
-    if (updateSettingsDto.chat_messages !== undefined) updateData.chat_messages = updateSettingsDto.chat_messages;
-    if (updateSettingsDto.marketing !== undefined) updateData.marketing = updateSettingsDto.marketing;
+    if (updateSettingsDto.new_messages !== undefined)
+      updateData.new_messages = updateSettingsDto.new_messages;
+    if (updateSettingsDto.new_matches !== undefined)
+      updateData.new_matches = updateSettingsDto.new_matches;
+    if (updateSettingsDto.new_likes !== undefined)
+      updateData.new_likes = updateSettingsDto.new_likes;
+    if (updateSettingsDto.chat_messages !== undefined)
+      updateData.chat_messages = updateSettingsDto.chat_messages;
+    if (updateSettingsDto.marketing !== undefined)
+      updateData.marketing = updateSettingsDto.marketing;
 
     const { data: settings, error } = await this.supabase
       .from('notification_settings')
@@ -157,7 +190,9 @@ export class NotificationsController {
 
   // 사용자의 등록된 토큰 목록 조회
   @Get('tokens/:userId')
-  async getUserTokens(@Param('userId') userId: string): Promise<PushTokensResponseDto[]> {
+  async getUserTokens(
+    @Param('userId') userId: string,
+  ): Promise<PushTokensResponseDto[]> {
     const { data: tokens, error } = await this.supabase
       .from('push_tokens')
       .select('*')
@@ -178,13 +213,21 @@ export class NotificationsController {
     @Param('userId') userId: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
-  ): Promise<{ notifications: NotificationHistoryDto[], total: number, page: number, limit: number }> {
-
+  ): Promise<{
+    notifications: NotificationHistoryDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     const offset = (pageNum - 1) * limitNum;
 
-    const { data: notifications, error, count } = await this.supabase
+    const {
+      data: notifications,
+      error,
+      count,
+    } = await this.supabase
       .from('push_notifications')
       .select('*', { count: 'exact' })
       .eq('user_id', userId)
@@ -224,8 +267,9 @@ export class NotificationsController {
   // 서버 푸시 알림 상태 확인
   @Get('status')
   async getNotificationStatus() {
-    const isFirebaseInitialized = this.notificationsService['firebaseConfig'].isInitialized();
-    
+    const isFirebaseInitialized =
+      this.notificationsService['firebaseConfig'].isInitialized();
+
     return {
       firebase_initialized: isFirebaseInitialized,
       service_status: 'running',

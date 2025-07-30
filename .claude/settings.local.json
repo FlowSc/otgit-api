@@ -23,7 +23,9 @@
       "Bash(ls:*)",
       "Bash(curl:*)",
       "Bash(npm run build:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm run lint)"
     ],
     "deny": []
   },

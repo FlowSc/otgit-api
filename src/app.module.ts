@@ -9,6 +9,7 @@ import { PhotosModule } from './photos/photos.module';
 import { LikesModule } from './likes/likes.module';
 import { ChatModule } from './chat/chat.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TicketsModule } from './tickets/tickets.module';
 import { FirebaseModule } from './config/firebase.module';
 
 @Module({
@@ -38,7 +39,8 @@ import { FirebaseModule } from './config/firebase.module';
     PhotosModule,
     LikesModule,
     ChatModule,
-    NotificationsModule
+    NotificationsModule,
+    TicketsModule,
   ],
   controllers: [AppController],
   providers: [

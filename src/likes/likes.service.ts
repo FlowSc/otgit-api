@@ -1,10 +1,28 @@
-import { Injectable, BadRequestException, InternalServerErrorException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  InternalServerErrorException,
+  ConflictException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '../config/supabase.config';
-import { SendLikeDto, LikeResponseDto, GetLikesDto, LikesListResponseDto, LikeWithUserDto, MatchResponseDto, GetMatchesDto, AcceptLikeDto, AcceptLikeResponseDto } from './dto/like.dto';
+import {
+  SendLikeDto,
+  LikeResponseDto,
+  GetLikesDto,
+  LikesListResponseDto,
+  LikeWithUserDto,
+  MatchResponseDto,
+  GetMatchesDto,
+  AcceptLikeDto,
+  AcceptLikeResponseDto,
+} from './dto/like.dto';
 import { ChatService } from '../chat/chat.service';
-import { NotificationsService, NotificationType } from '../notifications/notifications.service';
+import {
+  NotificationsService,
+  NotificationType,
+} from '../notifications/notifications.service';
 
 @Injectable()
 export class LikesService {
@@ -46,7 +64,8 @@ export class LikesService {
         .single();
 
       if (likeError) {
-        if (likeError.code === '23505') { // UNIQUE 제약 위반
+        if (likeError.code === '23505') {
+          // UNIQUE 제약 위반
           throw new ConflictException('Already liked this user');
         }
         throw new InternalServerErrorException('Failed to send like');
@@ -61,18 +80,21 @@ export class LikesService {
         .single();
 
       let isMatch = false;
-      
+
       if (mutualLike) {
         // 매칭 생성 (user1_id < user2_id 규칙 적용)
-        const [user1_id, user2_id] = sender_id < receiver_id ? [sender_id, receiver_id] : [receiver_id, sender_id];
-        
+        const [user1_id, user2_id] =
+          sender_id < receiver_id
+            ? [sender_id, receiver_id]
+            : [receiver_id, sender_id];
+
         const { error: matchError } = await this.supabase
           .from('matches')
           .insert([{ user1_id, user2_id }]);
 
         if (!matchError) {
           isMatch = true;
-          
+
           // 매칭 성공 시 양쪽 사용자에게 알림 전송
           try {
             // 발신자 정보 조회
@@ -82,7 +104,7 @@ export class LikesService {
               .eq('id', sender_id)
               .single();
 
-            // 수신자 정보 조회  
+            // 수신자 정보 조회
             const { data: receiver } = await this.supabase
               .from('users')
               .select('name')
@@ -113,7 +135,10 @@ export class LikesService {
               type: NotificationType.NEW_MATCH,
             });
           } catch (notificationError) {
-            console.error('Failed to send match notifications:', notificationError);
+            console.error(
+              'Failed to send match notifications:',
+              notificationError,
+            );
           }
         }
       } else {
@@ -148,9 +173,12 @@ export class LikesService {
         status: 'pending',
         is_match: isMatch,
       };
-
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof ConflictException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Send like error:', error);
@@ -164,12 +192,13 @@ export class LikesService {
 
     try {
       let query;
-      
+
       if (type === 'sent') {
         // 보낸 좋아요
         query = this.supabase
           .from('likes')
-          .select(`
+          .select(
+            `
             id,
             sender_id,
             receiver_id,
@@ -177,13 +206,16 @@ export class LikesService {
             status,
             responded_at,
             users!likes_receiver_id_fkey(id, name, age, gender)
-          `, { count: 'exact' })
+          `,
+            { count: 'exact' },
+          )
           .eq('sender_id', user_id);
       } else {
         // 받은 좋아요
         query = this.supabase
           .from('likes')
-          .select(`
+          .select(
+            `
             id,
             sender_id,
             receiver_id,
@@ -191,11 +223,17 @@ export class LikesService {
             status,
             responded_at,
             users!likes_sender_id_fkey(id, name, age, gender)
-          `, { count: 'exact' })
+          `,
+            { count: 'exact' },
+          )
           .eq('receiver_id', user_id);
       }
 
-      const { data: likes, error: likesError, count } = await query
+      const {
+        data: likes,
+        error: likesError,
+        count,
+      } = await query
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -204,9 +242,10 @@ export class LikesService {
       }
 
       // 프로필 사진 조회
-      const userIds = likes?.map(like => 
-        type === 'sent' ? like.receiver_id : like.sender_id
-      ) || [];
+      const userIds =
+        likes?.map((like) =>
+          type === 'sent' ? like.receiver_id : like.sender_id,
+        ) || [];
 
       const profilePhotosMap = new Map();
       if (userIds.length > 0) {
@@ -225,7 +264,8 @@ export class LikesService {
       const matchesMap = new Map();
       if (userIds.length > 0) {
         const matchQueries = userIds.map(async (otherId) => {
-          const [user1_id, user2_id] = user_id < otherId ? [user_id, otherId] : [otherId, user_id];
+          const [user1_id, user2_id] =
+            user_id < otherId ? [user_id, otherId] : [otherId, user_id];
           const { data } = await this.supabase
             .from('matches')
             .select('id')
@@ -233,7 +273,7 @@ export class LikesService {
             .eq('user2_id', user2_id)
             .eq('is_active', true)
             .single();
-          
+
           if (data) {
             matchesMap.set(otherId, true);
           }
@@ -242,9 +282,10 @@ export class LikesService {
         await Promise.all(matchQueries);
       }
 
-      const likesWithUser: LikeWithUserDto[] = (likes || []).map(like => {
+      const likesWithUser: LikeWithUserDto[] = (likes || []).map((like) => {
         const targetUser = like.users;
-        const targetUserId = type === 'sent' ? like.receiver_id : like.sender_id;
+        const targetUserId =
+          type === 'sent' ? like.receiver_id : like.sender_id;
         const profilePhoto = profilePhotosMap.get(targetUserId);
 
         return {
@@ -259,11 +300,13 @@ export class LikesService {
             name: targetUser.name,
             age: targetUser.age,
             gender: targetUser.gender,
-            profile_photo: profilePhoto ? {
-              id: profilePhoto.id,
-              file_url: profilePhoto.file_url,
-              file_name: profilePhoto.file_name,
-            } : undefined,
+            profile_photo: profilePhoto
+              ? {
+                  id: profilePhoto.id,
+                  file_url: profilePhoto.file_url,
+                  file_name: profilePhoto.file_name,
+                }
+              : undefined,
           },
           is_match: matchesMap.get(targetUserId) || false,
         };
@@ -276,7 +319,6 @@ export class LikesService {
         limit,
         type,
       };
-
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
         throw error;
@@ -286,20 +328,23 @@ export class LikesService {
     }
   }
 
-  async getMatches(getMatchesDto: GetMatchesDto): Promise<{ matches: any[], total: number, page: number, limit: number }> {
+  async getMatches(
+    getMatchesDto: GetMatchesDto,
+  ): Promise<{ matches: any[]; total: number; page: number; limit: number }> {
     const { user_id, page = 1, limit = 20, active_only = true } = getMatchesDto;
     const offset = (page - 1) * limit;
 
     try {
-      let query = this.supabase
-        .from('matches')
-        .select(`
+      let query = this.supabase.from('matches').select(
+        `
           id,
           user1_id,
           user2_id,
           matched_at,
           is_active
-        `, { count: 'exact' });
+        `,
+        { count: 'exact' },
+      );
 
       // 해당 사용자가 포함된 매칭만 조회
       query = query.or(`user1_id.eq.${user_id},user2_id.eq.${user_id}`);
@@ -308,7 +353,11 @@ export class LikesService {
         query = query.eq('is_active', true);
       }
 
-      const { data: matches, error: matchesError, count } = await query
+      const {
+        data: matches,
+        error: matchesError,
+        count,
+      } = await query
         .order('matched_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -317,8 +366,8 @@ export class LikesService {
       }
 
       // 상대방 사용자 정보 조회
-      const otherUserIds = (matches || []).map(match => 
-        match.user1_id === user_id ? match.user2_id : match.user1_id
+      const otherUserIds = (matches || []).map((match) =>
+        match.user1_id === user_id ? match.user2_id : match.user1_id,
       );
 
       const usersMap = new Map();
@@ -347,8 +396,9 @@ export class LikesService {
         }
       }
 
-      const matchesWithUser = (matches || []).map(match => {
-        const otherUserId = match.user1_id === user_id ? match.user2_id : match.user1_id;
+      const matchesWithUser = (matches || []).map((match) => {
+        const otherUserId =
+          match.user1_id === user_id ? match.user2_id : match.user1_id;
         const otherUser = usersMap.get(otherUserId);
         const profilePhoto = profilePhotosMap.get(otherUserId);
 
@@ -358,17 +408,21 @@ export class LikesService {
           user2_id: match.user2_id,
           matched_at: match.matched_at,
           is_active: match.is_active,
-          other_user: otherUser ? {
-            id: otherUser.id,
-            name: otherUser.name,
-            age: otherUser.age,
-            gender: otherUser.gender,
-            profile_photo: profilePhoto ? {
-              id: profilePhoto.id,
-              file_url: profilePhoto.file_url,
-              file_name: profilePhoto.file_name,
-            } : undefined,
-          } : null,
+          other_user: otherUser
+            ? {
+                id: otherUser.id,
+                name: otherUser.name,
+                age: otherUser.age,
+                gender: otherUser.gender,
+                profile_photo: profilePhoto
+                  ? {
+                      id: profilePhoto.id,
+                      file_url: profilePhoto.file_url,
+                      file_name: profilePhoto.file_name,
+                    }
+                  : undefined,
+              }
+            : null,
         };
       });
 
@@ -378,7 +432,6 @@ export class LikesService {
         page,
         limit,
       };
-
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
         throw error;
@@ -396,17 +449,20 @@ export class LikesService {
       }
 
       // UPSERT 방식으로 seen_users 테이블 업데이트
-      const { error } = await this.supabase
-        .from('seen_users')
-        .upsert([{
-          searcher_id: searcherId,
-          seen_user_id: seenUserId,
-          last_seen_at: new Date().toISOString(),
-          seen_count: 1
-        }], {
+      const { error } = await this.supabase.from('seen_users').upsert(
+        [
+          {
+            searcher_id: searcherId,
+            seen_user_id: seenUserId,
+            last_seen_at: new Date().toISOString(),
+            seen_count: 1,
+          },
+        ],
+        {
           onConflict: 'searcher_id,seen_user_id',
-          ignoreDuplicates: false
-        });
+          ignoreDuplicates: false,
+        },
+      );
 
       if (error) {
         // seen_count 증가를 위한 별도 업데이트
@@ -414,15 +470,14 @@ export class LikesService {
           .from('seen_users')
           .update({
             last_seen_at: new Date().toISOString(),
-            seen_count: this.supabase.rpc('increment_seen_count', { 
-              searcher_id: searcherId, 
-              seen_user_id: seenUserId 
-            })
+            seen_count: this.supabase.rpc('increment_seen_count', {
+              searcher_id: searcherId,
+              seen_user_id: seenUserId,
+            }),
           })
           .eq('searcher_id', searcherId)
           .eq('seen_user_id', seenUserId);
       }
-
     } catch (error) {
       // 에러가 발생해도 메인 로직에 영향을 주지 않도록 로그만 기록
       console.error('Mark user as seen error:', error);
@@ -442,7 +497,7 @@ export class LikesService {
         return [];
       }
 
-      return (data || []).map(row => row.seen_user_id);
+      return (data || []).map((row) => row.seen_user_id);
     } catch (error) {
       console.error('Get seen users error:', error);
       return [];
@@ -450,7 +505,9 @@ export class LikesService {
   }
 
   // 좋아요 승락
-  async acceptLike(acceptLikeDto: AcceptLikeDto): Promise<AcceptLikeResponseDto> {
+  async acceptLike(
+    acceptLikeDto: AcceptLikeDto,
+  ): Promise<AcceptLikeResponseDto> {
     const { like_id, user_id } = acceptLikeDto;
 
     try {
@@ -497,15 +554,16 @@ export class LikesService {
       });
 
       // 매칭 생성 (user1_id < user2_id 규칙 적용)
-      const [user1_id, user2_id] = like.sender_id < like.receiver_id 
-        ? [like.sender_id, like.receiver_id] 
-        : [like.receiver_id, like.sender_id];
-      
+      const [user1_id, user2_id] =
+        like.sender_id < like.receiver_id
+          ? [like.sender_id, like.receiver_id]
+          : [like.receiver_id, like.sender_id];
+
       const { error: matchError } = await this.supabase
         .from('matches')
         .upsert([{ user1_id, user2_id }], {
           onConflict: 'user1_id,user2_id',
-          ignoreDuplicates: true
+          ignoreDuplicates: true,
         });
 
       if (matchError) {
@@ -529,9 +587,11 @@ export class LikesService {
         },
         message: 'Like accepted successfully! Chat room created.',
       };
-
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Accept like error:', error);

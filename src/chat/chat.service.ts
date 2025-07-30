@@ -1,16 +1,25 @@
-import { Injectable, BadRequestException, InternalServerErrorException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  InternalServerErrorException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '../config/supabase.config';
-import { NotificationsService, NotificationType } from '../notifications/notifications.service';
-import { 
-  CreateChatRoomDto, 
-  ChatRoomResponseDto, 
-  SendMessageDto, 
-  MessageResponseDto, 
-  GetChatRoomsDto, 
-  GetMessagesDto, 
-  MarkAsReadDto 
+import {
+  NotificationsService,
+  NotificationType,
+} from '../notifications/notifications.service';
+import {
+  CreateChatRoomDto,
+  ChatRoomResponseDto,
+  SendMessageDto,
+  MessageResponseDto,
+  GetChatRoomsDto,
+  GetMessagesDto,
+  MarkAsReadDto,
 } from './dto/chat.dto';
 
 @Injectable()
@@ -24,7 +33,9 @@ export class ChatService {
     this.supabase = createSupabaseClient(this.configService);
   }
 
-  async createChatRoom(createChatRoomDto: CreateChatRoomDto): Promise<ChatRoomResponseDto> {
+  async createChatRoom(
+    createChatRoomDto: CreateChatRoomDto,
+  ): Promise<ChatRoomResponseDto> {
     let { user1_id, user2_id } = createChatRoomDto;
 
     try {
@@ -39,12 +50,13 @@ export class ChatService {
       }
 
       // 기존 채팅방 확인
-      const { data: existingRoom, error: existingRoomError } = await this.supabase
-        .from('chat_rooms')
-        .select('*')
-        .eq('user1_id', user1_id)
-        .eq('user2_id', user2_id)
-        .single();
+      const { data: existingRoom, error: existingRoomError } =
+        await this.supabase
+          .from('chat_rooms')
+          .select('*')
+          .eq('user1_id', user1_id)
+          .eq('user2_id', user2_id)
+          .single();
 
       if (existingRoom) {
         return {
@@ -71,7 +83,7 @@ export class ChatService {
       // 참여자 정보 생성
       const participants = [
         { chat_room_id: chatRoom.id, user_id: user1_id },
-        { chat_room_id: chatRoom.id, user_id: user2_id }
+        { chat_room_id: chatRoom.id, user_id: user2_id },
       ];
 
       const { error: participantsError } = await this.supabase
@@ -90,9 +102,11 @@ export class ChatService {
         updated_at: chatRoom.updated_at,
         is_active: chatRoom.is_active,
       };
-
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Create chat room error:', error);
@@ -100,13 +114,22 @@ export class ChatService {
     }
   }
 
-  async getChatRooms(getChatRoomsDto: GetChatRoomsDto): Promise<{ rooms: ChatRoomResponseDto[], total: number, page: number, limit: number }> {
+  async getChatRooms(getChatRoomsDto: GetChatRoomsDto): Promise<{
+    rooms: ChatRoomResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const { user_id, page = 1, limit = 20 } = getChatRoomsDto;
     const offset = (page - 1) * limit;
 
     try {
       // 사용자가 참여한 채팅방 조회
-      const { data: chatRooms, error: roomsError, count } = await this.supabase
+      const {
+        data: chatRooms,
+        error: roomsError,
+        count,
+      } = await this.supabase
         .from('chat_rooms')
         .select('*', { count: 'exact' })
         .or(`user1_id.eq.${user_id},user2_id.eq.${user_id}`)
@@ -122,8 +145,9 @@ export class ChatService {
 
       for (const room of chatRooms || []) {
         // 상대방 사용자 정보 조회
-        const otherUserId = room.user1_id === user_id ? room.user2_id : room.user1_id;
-        
+        const otherUserId =
+          room.user1_id === user_id ? room.user2_id : room.user1_id;
+
         const { data: otherUser } = await this.supabase
           .from('users')
           .select('id, name, age, gender')
@@ -162,15 +186,17 @@ export class ChatService {
             .select('*', { count: 'exact', head: true })
             .eq('chat_room_id', room.id)
             .neq('sender_id', user_id)
-            .gt('created_at', 
-              (await this.supabase
-                .from('chat_messages')
-                .select('created_at')
-                .eq('id', participant.last_read_message_id)
-                .single()
-              ).data?.created_at || '1970-01-01'
+            .gt(
+              'created_at',
+              (
+                await this.supabase
+                  .from('chat_messages')
+                  .select('created_at')
+                  .eq('id', participant.last_read_message_id)
+                  .single()
+              ).data?.created_at || '1970-01-01',
             );
-          
+
           unreadCount = unreadCountResult || 0;
         } else {
           // 읽은 메시지가 없는 경우 모든 메시지 개수
@@ -179,7 +205,7 @@ export class ChatService {
             .select('*', { count: 'exact', head: true })
             .eq('chat_room_id', room.id)
             .neq('sender_id', user_id);
-          
+
           unreadCount = totalCount || 0;
         }
 
@@ -190,17 +216,21 @@ export class ChatService {
           created_at: room.created_at,
           updated_at: room.updated_at,
           is_active: room.is_active,
-          other_user: otherUser ? {
-            id: otherUser.id,
-            name: otherUser.name,
-            age: otherUser.age,
-            gender: otherUser.gender,
-            profile_photo: profilePhoto ? {
-              id: profilePhoto.id,
-              file_url: profilePhoto.file_url,
-              file_name: profilePhoto.file_name,
-            } : undefined,
-          } : undefined,
+          other_user: otherUser
+            ? {
+                id: otherUser.id,
+                name: otherUser.name,
+                age: otherUser.age,
+                gender: otherUser.gender,
+                profile_photo: profilePhoto
+                  ? {
+                      id: profilePhoto.id,
+                      file_url: profilePhoto.file_url,
+                      file_name: profilePhoto.file_name,
+                    }
+                  : undefined,
+              }
+            : undefined,
           last_message: lastMessage || undefined,
           unread_count: unreadCount,
         });
@@ -212,7 +242,6 @@ export class ChatService {
         page,
         limit,
       };
-
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
         throw error;
@@ -222,8 +251,15 @@ export class ChatService {
     }
   }
 
-  async sendMessage(sendMessageDto: SendMessageDto): Promise<MessageResponseDto> {
-    const { chat_room_id, sender_id, message_text, message_type = 'text' } = sendMessageDto;
+  async sendMessage(
+    sendMessageDto: SendMessageDto,
+  ): Promise<MessageResponseDto> {
+    const {
+      chat_room_id,
+      sender_id,
+      message_text,
+      message_type = 'text',
+    } = sendMessageDto;
 
     try {
       // 채팅방 존재 및 권한 확인
@@ -239,18 +275,22 @@ export class ChatService {
 
       // 발신자가 채팅방 참여자인지 확인
       if (chatRoom.user1_id !== sender_id && chatRoom.user2_id !== sender_id) {
-        throw new ForbiddenException('You are not a participant of this chat room');
+        throw new ForbiddenException(
+          'You are not a participant of this chat room',
+        );
       }
 
       // 메시지 생성
       const { data: message, error: messageError } = await this.supabase
         .from('chat_messages')
-        .insert([{
-          chat_room_id,
-          sender_id,
-          message_text,
-          message_type,
-        }])
+        .insert([
+          {
+            chat_room_id,
+            sender_id,
+            message_text,
+            message_type,
+          },
+        ])
         .select()
         .single();
 
@@ -280,12 +320,16 @@ export class ChatService {
         .single();
 
       // 상대방에게 푸시 알림 전송
-      const recipientId = chatRoom.user1_id === sender_id ? chatRoom.user2_id : chatRoom.user1_id;
+      const recipientId =
+        chatRoom.user1_id === sender_id ? chatRoom.user2_id : chatRoom.user1_id;
       try {
         await this.notificationsService.sendPushNotification({
           userId: recipientId,
           title: sender?.name || '새 메시지',
-          body: message_text.length > 50 ? message_text.substring(0, 50) + '...' : message_text,
+          body:
+            message_text.length > 50
+              ? message_text.substring(0, 50) + '...'
+              : message_text,
           data: {
             senderName: sender?.name || 'Unknown',
             chatRoomId: chat_room_id,
@@ -307,19 +351,26 @@ export class ChatService {
         is_read: message.is_read,
         created_at: message.created_at,
         updated_at: message.updated_at,
-        sender: sender ? {
-          id: sender.id,
-          name: sender.name,
-          profile_photo: senderPhoto ? {
-            id: senderPhoto.id,
-            file_url: senderPhoto.file_url,
-            file_name: senderPhoto.file_name,
-          } : undefined,
-        } : undefined,
+        sender: sender
+          ? {
+              id: sender.id,
+              name: sender.name,
+              profile_photo: senderPhoto
+                ? {
+                    id: senderPhoto.id,
+                    file_url: senderPhoto.file_url,
+                    file_name: senderPhoto.file_name,
+                  }
+                : undefined,
+            }
+          : undefined,
       };
-
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Send message error:', error);
@@ -327,7 +378,12 @@ export class ChatService {
     }
   }
 
-  async getMessages(getMessagesDto: GetMessagesDto): Promise<{ messages: MessageResponseDto[], total: number, page: number, limit: number }> {
+  async getMessages(getMessagesDto: GetMessagesDto): Promise<{
+    messages: MessageResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const { chat_room_id, user_id, page = 1, limit = 50 } = getMessagesDto;
     const offset = (page - 1) * limit;
 
@@ -345,11 +401,17 @@ export class ChatService {
 
       // 사용자가 채팅방 참여자인지 확인
       if (chatRoom.user1_id !== user_id && chatRoom.user2_id !== user_id) {
-        throw new ForbiddenException('You are not a participant of this chat room');
+        throw new ForbiddenException(
+          'You are not a participant of this chat room',
+        );
       }
 
       // 메시지 조회
-      const { data: messages, error: messagesError, count } = await this.supabase
+      const {
+        data: messages,
+        error: messagesError,
+        count,
+      } = await this.supabase
         .from('chat_messages')
         .select('*', { count: 'exact' })
         .eq('chat_room_id', chat_room_id)
@@ -361,7 +423,9 @@ export class ChatService {
       }
 
       // 발신자 정보 조회
-      const senderIds = [...new Set((messages || []).map(msg => msg.sender_id))];
+      const senderIds = [
+        ...new Set((messages || []).map((msg) => msg.sender_id)),
+      ];
       const sendersMap = new Map();
       const senderPhotosMap = new Map();
 
@@ -386,30 +450,36 @@ export class ChatService {
         }
       }
 
-      const messagesWithSender: MessageResponseDto[] = (messages || []).map(message => {
-        const sender = sendersMap.get(message.sender_id);
-        const senderPhoto = senderPhotosMap.get(message.sender_id);
+      const messagesWithSender: MessageResponseDto[] = (messages || []).map(
+        (message) => {
+          const sender = sendersMap.get(message.sender_id);
+          const senderPhoto = senderPhotosMap.get(message.sender_id);
 
-        return {
-          id: message.id,
-          chat_room_id: message.chat_room_id,
-          sender_id: message.sender_id,
-          message_text: message.message_text,
-          message_type: message.message_type,
-          is_read: message.is_read,
-          created_at: message.created_at,
-          updated_at: message.updated_at,
-          sender: sender ? {
-            id: sender.id,
-            name: sender.name,
-            profile_photo: senderPhoto ? {
-              id: senderPhoto.id,
-              file_url: senderPhoto.file_url,
-              file_name: senderPhoto.file_name,
-            } : undefined,
-          } : undefined,
-        };
-      });
+          return {
+            id: message.id,
+            chat_room_id: message.chat_room_id,
+            sender_id: message.sender_id,
+            message_text: message.message_text,
+            message_type: message.message_type,
+            is_read: message.is_read,
+            created_at: message.created_at,
+            updated_at: message.updated_at,
+            sender: sender
+              ? {
+                  id: sender.id,
+                  name: sender.name,
+                  profile_photo: senderPhoto
+                    ? {
+                        id: senderPhoto.id,
+                        file_url: senderPhoto.file_url,
+                        file_name: senderPhoto.file_name,
+                      }
+                    : undefined,
+                }
+              : undefined,
+          };
+        },
+      );
 
       return {
         messages: messagesWithSender,
@@ -417,9 +487,12 @@ export class ChatService {
         page,
         limit,
       };
-
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Get messages error:', error);
@@ -444,7 +517,9 @@ export class ChatService {
 
       // 사용자가 채팅방 참여자인지 확인
       if (chatRoom.user1_id !== user_id && chatRoom.user2_id !== user_id) {
-        throw new ForbiddenException('You are not a participant of this chat room');
+        throw new ForbiddenException(
+          'You are not a participant of this chat room',
+        );
       }
 
       let targetMessageId = message_id;
@@ -476,14 +551,19 @@ export class ChatService {
           .eq('user_id', user_id);
 
         if (updateError) {
-          throw new InternalServerErrorException('Failed to mark messages as read');
+          throw new InternalServerErrorException(
+            'Failed to mark messages as read',
+          );
         }
       }
 
       return { message: 'Messages marked as read successfully' };
-
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Mark as read error:', error);

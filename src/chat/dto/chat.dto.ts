@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsString, IsOptional, IsBoolean, IsNumber, Min, IsIn } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  Min,
+  IsIn,
+} from 'class-validator';
 
 export class CreateChatRoomDto {
   @IsString()

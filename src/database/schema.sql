@@ -476,6 +476,40 @@ ALTER TABLE fcm_tokens ADD CONSTRAINT IF NOT EXISTS check_token_not_empty CHECK 
 ALTER TABLE notification_history ADD CONSTRAINT IF NOT EXISTS check_notification_type_values 
 CHECK (notification_type IN ('new_message', 'new_match', 'new_like', 'chat_message', 'system'));
 
+-- User profile additional fields
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mbti VARCHAR(4);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS personality TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS job VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+
+-- Create user_tickets table for ticket management
+CREATE TABLE IF NOT EXISTS user_tickets (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    free_tickets INTEGER NOT NULL DEFAULT 0 CHECK (free_tickets >= 0),
+    paid_tickets INTEGER NOT NULL DEFAULT 0 CHECK (paid_tickets >= 0),
+    total_purchased_tickets INTEGER NOT NULL DEFAULT 0 CHECK (total_purchased_tickets >= 0),
+    last_free_ticket_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create ticket_transactions table for transaction history
+CREATE TABLE IF NOT EXISTS ticket_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('earned_free', 'purchased', 'used', 'expired')),
+    ticket_type VARCHAR(10) NOT NULL DEFAULT 'free' CHECK (ticket_type IN ('free', 'paid')),
+    amount INTEGER NOT NULL,
+    description TEXT,
+    reference_id UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for ticket tables
+CREATE INDEX IF NOT EXISTS idx_user_tickets_free_date ON user_tickets(last_free_ticket_date, free_tickets);
+CREATE INDEX IF NOT EXISTS idx_ticket_transactions_user_type ON ticket_transactions(user_id, transaction_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_ticket_transactions_created_at ON ticket_transactions(created_at);
+
 -- Data integrity verification function
 CREATE OR REPLACE FUNCTION verify_data_integrity()
 RETURNS TABLE(check_name TEXT, status TEXT, details TEXT) AS $$

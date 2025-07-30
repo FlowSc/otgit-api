@@ -1,14 +1,22 @@
-import { Controller, Post, Get, Body, Query, ValidationPipe, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  ValidationPipe,
+  Param,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
-import { 
-  CreateChatRoomDto, 
-  ChatRoomResponseDto, 
-  SendMessageDto, 
-  MessageResponseDto, 
-  GetChatRoomsDto, 
-  GetMessagesDto, 
-  MarkAsReadDto 
+import {
+  CreateChatRoomDto,
+  ChatRoomResponseDto,
+  SendMessageDto,
+  MessageResponseDto,
+  GetChatRoomsDto,
+  GetMessagesDto,
+  MarkAsReadDto,
 } from './dto/chat.dto';
 
 @Controller('chat')
@@ -19,7 +27,9 @@ export class ChatController {
   ) {}
 
   @Post('rooms')
-  async createChatRoom(@Body(ValidationPipe) createChatRoomDto: CreateChatRoomDto): Promise<ChatRoomResponseDto> {
+  async createChatRoom(
+    @Body(ValidationPipe) createChatRoomDto: CreateChatRoomDto,
+  ): Promise<ChatRoomResponseDto> {
     return this.chatService.createChatRoom(createChatRoomDto);
   }
 
@@ -29,7 +39,9 @@ export class ChatController {
   }
 
   @Post('messages')
-  async sendMessage(@Body(ValidationPipe) sendMessageDto: SendMessageDto): Promise<MessageResponseDto> {
+  async sendMessage(
+    @Body(ValidationPipe) sendMessageDto: SendMessageDto,
+  ): Promise<MessageResponseDto> {
     return this.chatService.sendMessage(sendMessageDto);
   }
 

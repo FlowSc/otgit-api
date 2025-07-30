@@ -1,23 +1,34 @@
-import { 
-  Controller, 
-  Post, 
-  Get, 
-  Put, 
-  Delete, 
-  Body, 
-  Param, 
-  Query, 
-  ValidationPipe, 
-  UseInterceptors, 
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  ValidationPipe,
+  UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Request
+  Request,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PhotosService } from './photos.service';
-import { UploadProfilePhotoDto, ProfilePhotoResponseDto } from './dto/profile-photo.dto';
-import { UploadTravelPhotoDto, UpdateTravelPhotoDto, QueryTravelPhotosDto, TravelPhotoResponseDto } from './dto/travel-photo.dto';
-import { FindNearbyUsersDto, FindNearbyUsersResponseDto } from './dto/nearby-users.dto';
+import {
+  UploadProfilePhotoDto,
+  ProfilePhotoResponseDto,
+} from './dto/profile-photo.dto';
+import {
+  UploadTravelPhotoDto,
+  UpdateTravelPhotoDto,
+  QueryTravelPhotosDto,
+  TravelPhotoResponseDto,
+} from './dto/travel-photo.dto';
+import {
+  FindNearbyUsersDto,
+  FindNearbyUsersResponseDto,
+} from './dto/nearby-users.dto';
 
 @Controller('photos')
 export class PhotosController {
@@ -25,17 +36,22 @@ export class PhotosController {
 
   // Profile Photo Endpoints
   @Post('profile')
-  @UseInterceptors(FileInterceptor('file', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
-    },
-    fileFilter: (req, file, callback) => {
-      if (!file.mimetype.startsWith('image/')) {
-        return callback(new BadRequestException('Only image files are allowed'), false);
-      }
-      callback(null, true);
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+      },
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return callback(
+            new BadRequestException('Only image files are allowed'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
   async uploadProfilePhoto(
     @UploadedFile() file: Express.Multer.File,
     @Body('user_id') userId: string, // TODO: Replace with JWT auth
@@ -54,28 +70,37 @@ export class PhotosController {
   }
 
   @Get('profile/:userId')
-  async getProfilePhoto(@Param('userId') userId: string): Promise<ProfilePhotoResponseDto | null> {
+  async getProfilePhoto(
+    @Param('userId') userId: string,
+  ): Promise<ProfilePhotoResponseDto | null> {
     return this.photosService.getProfilePhoto(userId);
   }
 
   @Delete('profile/:userId')
-  async deleteProfilePhoto(@Param('userId') userId: string): Promise<{ message: string }> {
+  async deleteProfilePhoto(
+    @Param('userId') userId: string,
+  ): Promise<{ message: string }> {
     return this.photosService.deleteProfilePhoto(userId);
   }
 
   // Travel Photo Endpoints
   @Post('travel')
-  @UseInterceptors(FileInterceptor('file', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
-    },
-    fileFilter: (req, file, callback) => {
-      if (!file.mimetype.startsWith('image/')) {
-        return callback(new BadRequestException('Only image files are allowed'), false);
-      }
-      callback(null, true);
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+      },
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return callback(
+            new BadRequestException('Only image files are allowed'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
   async uploadTravelPhoto(
     @UploadedFile() file: Express.Multer.File,
     @Body(ValidationPipe) body: any, // We'll parse this manually due to multipart form
@@ -91,18 +116,29 @@ export class PhotosController {
       description: body.description,
       location_name: body.location_name,
       taken_at: body.taken_at,
-      is_public: body.is_public !== undefined ? body.is_public === 'true' : true,
+      is_public:
+        body.is_public !== undefined ? body.is_public === 'true' : true,
     };
 
     // Validate required fields
     if (!body.user_id) {
       throw new BadRequestException('user_id is required');
     }
-    if (isNaN(uploadDto.latitude) || uploadDto.latitude < -90 || uploadDto.latitude > 90) {
+    if (
+      isNaN(uploadDto.latitude) ||
+      uploadDto.latitude < -90 ||
+      uploadDto.latitude > 90
+    ) {
       throw new BadRequestException('Valid latitude is required (-90 to 90)');
     }
-    if (isNaN(uploadDto.longitude) || uploadDto.longitude < -180 || uploadDto.longitude > 180) {
-      throw new BadRequestException('Valid longitude is required (-180 to 180)');
+    if (
+      isNaN(uploadDto.longitude) ||
+      uploadDto.longitude < -180 ||
+      uploadDto.longitude > 180
+    ) {
+      throw new BadRequestException(
+        'Valid longitude is required (-180 to 180)',
+      );
     }
 
     return this.photosService.uploadTravelPhoto(body.user_id, uploadDto, file);
@@ -111,12 +147,19 @@ export class PhotosController {
   @Get('travel')
   async getTravelPhotos(
     @Query(ValidationPipe) queryDto: QueryTravelPhotosDto,
-  ): Promise<{ photos: TravelPhotoResponseDto[], total: number, page: number, limit: number }> {
+  ): Promise<{
+    photos: TravelPhotoResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.photosService.getTravelPhotos(queryDto);
   }
 
   @Get('travel/:photoId')
-  async getTravelPhoto(@Param('photoId') photoId: string): Promise<TravelPhotoResponseDto> {
+  async getTravelPhoto(
+    @Param('photoId') photoId: string,
+  ): Promise<TravelPhotoResponseDto> {
     return this.photosService.getTravelPhoto(photoId);
   }
 
@@ -153,7 +196,7 @@ export class PhotosController {
     @Query('radius_km') radiusKm: number = 10,
     @Query('limit') limit: number = 20,
     @Query('is_public') isPublic: boolean = true,
-  ): Promise<{ photos: TravelPhotoResponseDto[], total: number }> {
+  ): Promise<{ photos: TravelPhotoResponseDto[]; total: number }> {
     const queryDto: QueryTravelPhotosDto = {
       center_latitude: latitude,
       center_longitude: longitude,

@@ -10,26 +10,25 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function checkTables() {
   console.log('Checking if users table exists...');
-  
+
   try {
     // Try to query the users table
-    const { data, error } = await supabase
-      .from('users')
-      .select('id')
-      .limit(1);
-    
+    const { data, error } = await supabase.from('users').select('id').limit(1);
+
     if (error) {
       console.log('Users table does not exist:', error.message);
-      console.log('\nPlease create the table using the SQL in src/database/schema.sql');
+      console.log(
+        '\nPlease create the table using the SQL in src/database/schema.sql',
+      );
       console.log('You can run it in the Supabase Dashboard SQL Editor.');
     } else {
       console.log('Users table exists!');
-      
+
       // Check table structure
       const { data: columns, error: columnsError } = await supabase
         .rpc('get_table_columns', { table_name: 'users' })
         .limit(20);
-      
+
       if (!columnsError && columns) {
         console.log('\nTable columns:', columns);
       }

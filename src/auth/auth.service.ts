@@ -1,21 +1,38 @@
-import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  InternalServerErrorException,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
-import { SocialLoginDto, SocialCallbackDto, SocialProvider } from './dto/social-login.dto';
-import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
+import { SocialLoginDto, SocialCallbackDto } from './dto/social-login.dto';
+import {
+  SendVerificationCodeDto,
+  VerifyPhoneCodeDto,
+} from './dto/phone-verification.dto';
 import { CheckEmailDto, CheckNameDto } from './dto/check-duplicate.dto';
-import { UpdateLocationDto, LocationResponseDto } from './dto/update-location.dto';
+import {
+  UpdateLocationDto,
+  LocationResponseDto,
+} from './dto/update-location.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { createSupabaseClient } from '../config/supabase.config';
+import { TicketsSchedulerService } from '../tickets/tickets-scheduler.service';
 
 @Injectable()
 export class AuthService {
   private supabase: SupabaseClient;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private ticketsSchedulerService: TicketsSchedulerService,
+  ) {
     this.supabase = createSupabaseClient(this.configService);
   }
 
@@ -24,22 +41,30 @@ export class AuthService {
 
     try {
       // 인증된 전화번호인지 확인
-      const { data: verifiedPhone, error: verificationError } = await this.supabase
-        .from('phone_verifications')
-        .select('*')
-        .eq('phone', phone)
-        .eq('is_verified', true)
-        .gte('verified_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // 10분 이내
-        .order('verified_at', { ascending: false })
-        .limit(1)
-        .single();
+      const { data: verifiedPhone, error: verificationError } =
+        await this.supabase
+          .from('phone_verifications')
+          .select('*')
+          .eq('phone', phone)
+          .eq('is_verified', true)
+          .gte(
+            'verified_at',
+            new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+          ) // 10분 이내
+          .order('verified_at', { ascending: false })
+          .limit(1)
+          .single();
 
       if (verificationError && verificationError.code !== 'PGRST116') {
-        throw new InternalServerErrorException('Failed to check phone verification');
+        throw new InternalServerErrorException(
+          'Failed to check phone verification',
+        );
       }
 
       if (!verifiedPhone) {
-        throw new BadRequestException('Phone number must be verified before registration. Please verify your phone number first.');
+        throw new BadRequestException(
+          'Phone number must be verified before registration. Please verify your phone number first.',
+        );
       }
 
       // Check if email already exists
@@ -80,8 +105,8 @@ export class AuthService {
             gender,
             age,
             phone_verified: true, // 이미 인증되었으므로 true로 설정
-            login_type: 'email'
-          }
+            login_type: 'email',
+          },
         ])
         .select('id, email, name, phone, gender, age, created_at')
         .single();
@@ -90,16 +115,22 @@ export class AuthService {
         throw new InternalServerErrorException('Failed to create user profile');
       }
 
+      // 새로 가입한 사용자에게 초기 티켓 지급
+      await this.ticketsSchedulerService.grantInitialTicket(data.id);
+
       return {
-        message: 'User registered successfully. Please verify your phone number.',
-        user: data
+        message:
+          'User registered successfully. Please verify your phone number.',
+        user: data,
       };
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
       }
       console.error('Registration error:', error);
-      throw new InternalServerErrorException(`Registration failed: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Registration failed: ${error.message}`,
+      );
     }
   }
 
@@ -120,11 +151,16 @@ export class AuthService {
 
       // 소셜 로그인 사용자 확인 (password_hash가 비어있으면 소셜 로그인 사용자)
       if (!user.password_hash) {
-        throw new UnauthorizedException('Please use social login for this account');
+        throw new UnauthorizedException(
+          'Please use social login for this account',
+        );
       }
 
       // 비밀번호 확인
-      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      const isPasswordValid = await bcrypt.compare(
+        password,
+        user.password_hash,
+      );
       if (!isPasswordValid) {
         throw new UnauthorizedException('Invalid email or password');
       }
@@ -146,7 +182,9 @@ export class AuthService {
       };
 
       const accessToken = jwt.sign(payload, jwtSecret, { expiresIn: '1h' });
-      const refreshToken = jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: '7d' });
+      const refreshToken = jwt.sign({ sub: user.id }, jwtSecret, {
+        expiresIn: '7d',
+      });
 
       return {
         message: 'Login successful',
@@ -172,12 +210,13 @@ export class AuthService {
 
   async socialLogin(socialLoginDto: SocialLoginDto) {
     const { provider, redirectTo } = socialLoginDto;
-    
+
     // Supabase OAuth URL 생성
     const { data, error } = await this.supabase.auth.signInWithOAuth({
       provider: provider as 'google' | 'apple',
       options: {
-        redirectTo: redirectTo || `${this.configService.get('API_URL')}/auth/callback`,
+        redirectTo:
+          redirectTo || `${this.configService.get('API_URL')}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -186,7 +225,9 @@ export class AuthService {
     });
 
     if (error) {
-      throw new InternalServerErrorException(`Failed to initialize ${provider} login`);
+      throw new InternalServerErrorException(
+        `Failed to initialize ${provider} login`,
+      );
     }
 
     return {
@@ -205,10 +246,13 @@ export class AuthService {
 
     try {
       // OAuth 코드를 사용하여 세션 교환
-      const { data: authData, error: authError } = await this.supabase.auth.exchangeCodeForSession(code);
+      const { data: authData, error: authError } =
+        await this.supabase.auth.exchangeCodeForSession(code);
 
       if (authError) {
-        throw new InternalServerErrorException('Failed to exchange code for session');
+        throw new InternalServerErrorException(
+          'Failed to exchange code for session',
+        );
       }
 
       const { user, session } = authData;
@@ -220,12 +264,13 @@ export class AuthService {
         .eq('email', user.email)
         .single();
 
-      if (userError && userError.code !== 'PGRST116') { // PGRST116 = Row not found
+      if (userError && userError.code !== 'PGRST116') {
+        // PGRST116 = Row not found
         throw new InternalServerErrorException('Failed to check existing user');
       }
 
       let userData: any;
-      
+
       if (!existingUser) {
         // 소셜 로그인 제공자 확인
         const provider = user.app_metadata?.provider || 'google';
@@ -238,20 +283,25 @@ export class AuthService {
             {
               id: user.id, // Supabase Auth user ID 사용
               email: user.email,
-              name: user.user_metadata?.full_name || user.user_metadata?.name || 'User',
+              name:
+                user.user_metadata?.full_name ||
+                user.user_metadata?.name ||
+                'User',
               password_hash: '', // 소셜 로그인 사용자는 비밀번호 없음
               phone: user.phone || '',
               gender: 'male', // 기본값, 나중에 프로필 업데이트에서 변경 가능
               age: 20, // 기본값, 나중에 프로필 업데이트에서 변경 가능
               phone_verified: !!user.phone_confirmed_at,
               login_type: loginType,
-            }
+            },
           ])
           .select()
           .single();
 
         if (createError) {
-          throw new InternalServerErrorException('Failed to create user profile');
+          throw new InternalServerErrorException(
+            'Failed to create user profile',
+          );
         }
 
         userData = newUser;
@@ -268,10 +318,15 @@ export class AuthService {
         provider_refresh_token: session.provider_refresh_token,
       };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
-      throw new InternalServerErrorException('OAuth callback processing failed');
+      throw new InternalServerErrorException(
+        'OAuth callback processing failed',
+      );
     }
   }
 
@@ -290,11 +345,15 @@ export class AuthService {
 
     // TODO: 실제 SMS 서비스 연동 (예: AWS SNS, Twilio 등)
     // await smsService.send(phone, `인증 코드: ${code}`);
-    throw new InternalServerErrorException('SMS service not configured for production');
+    throw new InternalServerErrorException(
+      'SMS service not configured for production',
+    );
   }
 
   // 회원가입 전 전화번호 인증 코드 발송
-  async sendPreSignupVerificationCode(sendVerificationCodeDto: SendVerificationCodeDto) {
+  async sendPreSignupVerificationCode(
+    sendVerificationCodeDto: SendVerificationCodeDto,
+  ) {
     const { phone } = sendVerificationCodeDto;
 
     try {
@@ -332,11 +391,13 @@ export class AuthService {
             phone,
             verification_code: code,
             expires_at: expiresAt.toISOString(),
-          }
+          },
         ]);
 
       if (saveError) {
-        throw new InternalServerErrorException('Failed to save verification code');
+        throw new InternalServerErrorException(
+          'Failed to save verification code',
+        );
       }
 
       // SMS 전송
@@ -351,7 +412,9 @@ export class AuthService {
         throw error;
       }
       console.error('Send verification code error:', error);
-      throw new InternalServerErrorException('Failed to send verification code');
+      throw new InternalServerErrorException(
+        'Failed to send verification code',
+      );
     }
   }
 
@@ -398,11 +461,13 @@ export class AuthService {
             phone,
             verification_code: code,
             expires_at: expiresAt.toISOString(),
-          }
+          },
         ]);
 
       if (saveError) {
-        throw new InternalServerErrorException('Failed to save verification code');
+        throw new InternalServerErrorException(
+          'Failed to save verification code',
+        );
       }
 
       // SMS 전송
@@ -417,7 +482,9 @@ export class AuthService {
         throw error;
       }
       console.error('Send verification code error:', error);
-      throw new InternalServerErrorException('Failed to send verification code');
+      throw new InternalServerErrorException(
+        'Failed to send verification code',
+      );
     }
   }
 
@@ -442,19 +509,22 @@ export class AuthService {
       }
 
       // 유효한 인증 코드 찾기
-      const { data: verification, error: verificationError } = await this.supabase
-        .from('phone_verifications')
-        .select('*')
-        .eq('phone', phone)
-        .eq('verification_code', code)
-        .eq('is_verified', false)
-        .gte('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const { data: verification, error: verificationError } =
+        await this.supabase
+          .from('phone_verifications')
+          .select('*')
+          .eq('phone', phone)
+          .eq('verification_code', code)
+          .eq('is_verified', false)
+          .gte('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
 
       if (verificationError && verificationError.code !== 'PGRST116') {
-        throw new InternalServerErrorException('Failed to check verification code');
+        throw new InternalServerErrorException(
+          'Failed to check verification code',
+        );
       }
 
       if (!verification) {
@@ -469,9 +539,9 @@ export class AuthService {
         if (currentVerification) {
           await this.supabase
             .from('phone_verifications')
-            .update({ 
+            .update({
               attempts: (currentVerification.attempts || 0) + 1,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
             })
             .eq('phone', phone)
             .eq('is_verified', false);
@@ -483,10 +553,10 @@ export class AuthService {
       // 인증 코드를 검증됨으로 표시
       await this.supabase
         .from('phone_verifications')
-        .update({ 
+        .update({
           is_verified: true,
           verified_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', verification.id);
 
@@ -496,7 +566,10 @@ export class AuthService {
         phone,
       };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof ConflictException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
       console.error('Verify pre-signup phone code error:', error);
@@ -510,19 +583,22 @@ export class AuthService {
 
     try {
       // 유효한 인증 코드 찾기
-      const { data: verification, error: verificationError } = await this.supabase
-        .from('phone_verifications')
-        .select('*')
-        .eq('phone', phone)
-        .eq('verification_code', code)
-        .eq('is_verified', false)
-        .gte('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const { data: verification, error: verificationError } =
+        await this.supabase
+          .from('phone_verifications')
+          .select('*')
+          .eq('phone', phone)
+          .eq('verification_code', code)
+          .eq('is_verified', false)
+          .gte('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
 
       if (verificationError && verificationError.code !== 'PGRST116') {
-        throw new InternalServerErrorException('Failed to check verification code');
+        throw new InternalServerErrorException(
+          'Failed to check verification code',
+        );
       }
 
       if (!verification) {
@@ -537,9 +613,9 @@ export class AuthService {
         if (currentVerification) {
           await this.supabase
             .from('phone_verifications')
-            .update({ 
+            .update({
               attempts: (currentVerification.attempts || 0) + 1,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
             })
             .eq('phone', phone)
             .eq('is_verified', false);
@@ -551,24 +627,26 @@ export class AuthService {
       // 인증 코드를 검증됨으로 표시
       await this.supabase
         .from('phone_verifications')
-        .update({ 
+        .update({
           is_verified: true,
           verified_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', verification.id);
 
       // 사용자의 phone_verified를 true로 업데이트
       const { error: updateUserError } = await this.supabase
         .from('users')
-        .update({ 
+        .update({
           phone_verified: true,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('phone', phone);
 
       if (updateUserError) {
-        throw new InternalServerErrorException('Failed to update user verification status');
+        throw new InternalServerErrorException(
+          'Failed to update user verification status',
+        );
       }
 
       return {
@@ -585,7 +663,10 @@ export class AuthService {
   }
 
   // 사용자 위치 업데이트
-  async updateUserLocation(userId: string, updateLocationDto: UpdateLocationDto): Promise<LocationResponseDto> {
+  async updateUserLocation(
+    userId: string,
+    updateLocationDto: UpdateLocationDto,
+  ): Promise<LocationResponseDto> {
     const { latitude, longitude, location_name } = updateLocationDto;
 
     try {
@@ -610,11 +691,15 @@ export class AuthService {
           last_location_updated_at: new Date().toISOString(),
         })
         .eq('id', userId)
-        .select('last_latitude, last_longitude, last_location_name, last_location_updated_at')
+        .select(
+          'last_latitude, last_longitude, last_location_name, last_location_updated_at',
+        )
         .single();
 
       if (error) {
-        throw new InternalServerErrorException('Failed to update user location');
+        throw new InternalServerErrorException(
+          'Failed to update user location',
+        );
       }
 
       return {
@@ -624,7 +709,10 @@ export class AuthService {
         updated_at: data.last_location_updated_at,
       };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Update location error:', error);
@@ -637,7 +725,9 @@ export class AuthService {
     try {
       const { data, error } = await this.supabase
         .from('users')
-        .select('last_latitude, last_longitude, last_location_name, last_location_updated_at')
+        .select(
+          'last_latitude, last_longitude, last_location_name, last_location_updated_at',
+        )
         .eq('id', userId)
         .single();
 
@@ -675,7 +765,9 @@ export class AuthService {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        throw new InternalServerErrorException('Failed to check email duplicate');
+        throw new InternalServerErrorException(
+          'Failed to check email duplicate',
+        );
       }
 
       const isDuplicate = !!existingUser;
@@ -684,14 +776,16 @@ export class AuthService {
         email,
         is_duplicate: isDuplicate,
         available: !isDuplicate,
-        message: isDuplicate ? 'Email is already in use' : 'Email is available'
+        message: isDuplicate ? 'Email is already in use' : 'Email is available',
       };
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
       console.error('Check email duplicate error:', error);
-      throw new InternalServerErrorException('Failed to check email availability');
+      throw new InternalServerErrorException(
+        'Failed to check email availability',
+      );
     }
   }
 
@@ -707,7 +801,9 @@ export class AuthService {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        throw new InternalServerErrorException('Failed to check name duplicate');
+        throw new InternalServerErrorException(
+          'Failed to check name duplicate',
+        );
       }
 
       const isDuplicate = !!existingUser;
@@ -716,14 +812,71 @@ export class AuthService {
         name,
         is_duplicate: isDuplicate,
         available: !isDuplicate,
-        message: isDuplicate ? 'Name is already in use' : 'Name is available'
+        message: isDuplicate ? 'Name is already in use' : 'Name is available',
       };
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
       console.error('Check name duplicate error:', error);
-      throw new InternalServerErrorException('Failed to check name availability');
+      throw new InternalServerErrorException(
+        'Failed to check name availability',
+      );
+    }
+  }
+
+  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto) {
+    const { mbti, personality, job, bio } = updateProfileDto;
+
+    try {
+      // 사용자 존재 확인
+      const { data: existingUser, error: userError } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !existingUser) {
+        throw new BadRequestException('User not found');
+      }
+
+      // 업데이트할 데이터 준비 (undefined 값 제외)
+      const updateData: any = {};
+      if (mbti !== undefined) updateData.mbti = mbti;
+      if (personality !== undefined) updateData.personality = personality;
+      if (job !== undefined) updateData.job = job;
+      if (bio !== undefined) updateData.bio = bio;
+
+      // 업데이트할 데이터가 없으면 에러
+      if (Object.keys(updateData).length === 0) {
+        throw new BadRequestException('No data to update');
+      }
+
+      // 프로필 업데이트
+      const { data, error } = await this.supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', userId)
+        .select(
+          'id, email, name, phone, gender, age, mbti, personality, job, bio, updated_at',
+        )
+        .single();
+
+      if (error) {
+        console.error('Profile update error:', error);
+        throw new InternalServerErrorException('Failed to update profile');
+      }
+
+      return {
+        message: 'Profile updated successfully',
+        user: data,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('Update profile error:', error);
+      throw new InternalServerErrorException('Failed to update profile');
     }
   }
 }

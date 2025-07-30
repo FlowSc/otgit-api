@@ -1,4 +1,8 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '../config/supabase.config';
@@ -42,7 +46,10 @@ export class NotificationsService {
   }
 
   // 알림 템플릿 생성
-  private getNotificationTemplate(type: NotificationType, data: any): NotificationTemplate {
+  private getNotificationTemplate(
+    type: NotificationType,
+    data: any,
+  ): NotificationTemplate {
     switch (type) {
       case NotificationType.NEW_MESSAGE:
         return {
@@ -119,7 +126,7 @@ export class NotificationsService {
         return [];
       }
 
-      return tokens.map(t => t.token);
+      return tokens.map((t) => t.token);
     } catch (error) {
       this.logger.error(`Error getting user tokens:`, error);
       return [];
@@ -154,7 +161,10 @@ export class NotificationsService {
   }
 
   // 알림 설정 확인
-  private isNotificationEnabled(settings: any, type: NotificationType): boolean {
+  private isNotificationEnabled(
+    settings: any,
+    type: NotificationType,
+  ): boolean {
     switch (type) {
       case NotificationType.NEW_MESSAGE:
         return settings.new_messages !== false;
@@ -180,25 +190,25 @@ export class NotificationsService {
     errorMessage?: string,
   ): Promise<void> {
     try {
-      await this.supabase
-        .from('push_notifications')
-        .insert({
-          user_id: userId,
-          title: template.title,
-          body: template.body,
-          data: template.data,
-          notification_type: type,
-          is_sent: isSent,
-          sent_at: isSent ? new Date().toISOString() : null,
-          error_message: errorMessage,
-        });
+      await this.supabase.from('push_notifications').insert({
+        user_id: userId,
+        title: template.title,
+        body: template.body,
+        data: template.data,
+        notification_type: type,
+        is_sent: isSent,
+        sent_at: isSent ? new Date().toISOString() : null,
+        error_message: errorMessage,
+      });
     } catch (error) {
       this.logger.error(`Failed to save notification history:`, error);
     }
   }
 
   // 단일 사용자에게 푸시 알림 전송
-  async sendPushNotification(notificationData: PushNotificationData): Promise<boolean> {
+  async sendPushNotification(
+    notificationData: PushNotificationData,
+  ): Promise<boolean> {
     try {
       if (!this.messaging) {
         this.logger.warn('Firebase messaging not initialized');
@@ -206,21 +216,30 @@ export class NotificationsService {
       }
 
       // 사용자 알림 설정 확인
-      const settings = await this.getUserNotificationSettings(notificationData.userId);
+      const settings = await this.getUserNotificationSettings(
+        notificationData.userId,
+      );
       if (!this.isNotificationEnabled(settings, notificationData.type)) {
-        this.logger.log(`Notification disabled for user ${notificationData.userId}, type: ${notificationData.type}`);
+        this.logger.log(
+          `Notification disabled for user ${notificationData.userId}, type: ${notificationData.type}`,
+        );
         return false;
       }
 
       // 사용자 토큰 조회
       const tokens = await this.getUserTokens(notificationData.userId);
       if (tokens.length === 0) {
-        this.logger.warn(`No active tokens found for user: ${notificationData.userId}`);
+        this.logger.warn(
+          `No active tokens found for user: ${notificationData.userId}`,
+        );
         return false;
       }
 
       // 알림 템플릿 생성
-      const template = this.getNotificationTemplate(notificationData.type, notificationData.data);
+      const template = this.getNotificationTemplate(
+        notificationData.type,
+        notificationData.data,
+      );
 
       // FCM 메시지 생성
       const message: admin.messaging.MulticastMessage = {
@@ -248,13 +267,15 @@ export class NotificationsService {
 
       // 푸시 알림 전송
       const response = await this.messaging.sendEachForMulticast(message);
-      
+
       let success = false;
       let errorMessage: string | undefined;
 
       if (response.successCount > 0) {
         success = true;
-        this.logger.log(`Push notification sent successfully to ${response.successCount} devices for user: ${notificationData.userId}`);
+        this.logger.log(
+          `Push notification sent successfully to ${response.successCount} devices for user: ${notificationData.userId}`,
+        );
       }
 
       if (response.failureCount > 0) {
@@ -263,7 +284,9 @@ export class NotificationsService {
           .map((resp, idx) => `Token ${idx}: ${resp.error?.message}`)
           .join(', ');
         errorMessage = errors;
-        this.logger.error(`Failed to send to ${response.failureCount} devices: ${errors}`);
+        this.logger.error(
+          `Failed to send to ${response.failureCount} devices: ${errors}`,
+        );
 
         // 만료된 토큰들 비활성화
         await this.handleFailedTokens(tokens, response.responses);
@@ -286,7 +309,9 @@ export class NotificationsService {
   }
 
   // 여러 사용자에게 푸시 알림 전송
-  async sendBatchPushNotifications(notifications: PushNotificationData[]): Promise<number> {
+  async sendBatchPushNotifications(
+    notifications: PushNotificationData[],
+  ): Promise<number> {
     let successCount = 0;
 
     for (const notification of notifications) {
@@ -294,7 +319,9 @@ export class NotificationsService {
       if (success) successCount++;
     }
 
-    this.logger.log(`Batch notification completed: ${successCount}/${notifications.length} sent successfully`);
+    this.logger.log(
+      `Batch notification completed: ${successCount}/${notifications.length} sent successfully`,
+    );
     return successCount;
   }
 
@@ -351,16 +378,14 @@ export class NotificationsService {
       }
 
       // 새 토큰 등록
-      const { error } = await this.supabase
-        .from('push_tokens')
-        .insert({
-          user_id: userId,
-          token: token,
-          device_type: deviceType,
-          device_id: deviceId,
-          app_version: appVersion,
-          is_active: true,
-        });
+      const { error } = await this.supabase.from('push_tokens').insert({
+        user_id: userId,
+        token: token,
+        device_type: deviceType,
+        device_id: deviceId,
+        app_version: appVersion,
+        is_active: true,
+      });
 
       if (error) {
         this.logger.error(`Failed to register token:`, error);
@@ -376,7 +401,11 @@ export class NotificationsService {
   }
 
   // 토큰 비활성화
-  async deactivateToken(userId: string, token?: string, deviceId?: string): Promise<boolean> {
+  async deactivateToken(
+    userId: string,
+    token?: string,
+    deviceId?: string,
+  ): Promise<boolean> {
     try {
       let query = this.supabase
         .from('push_tokens')

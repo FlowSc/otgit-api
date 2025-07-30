@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber, Min, Max, IsBoolean } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsBoolean,
+} from 'class-validator';
 
 export class FindNearbyUsersDto {
   @IsString()

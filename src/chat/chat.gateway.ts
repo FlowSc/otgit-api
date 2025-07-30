@@ -44,8 +44,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: AuthenticatedSocket) {
     try {
       // JWT 토큰 인증
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-      
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.replace('Bearer ', '');
+
       if (!token) {
         this.logger.warn(`Connection rejected: No token provided`);
         client.disconnect();
@@ -78,14 +80,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         await this.joinUserChatRooms(client);
       }
 
-      this.logger.log(`User ${client.userInfo.name} (${client.userId}) connected`);
+      this.logger.log(
+        `User ${client.userInfo.name} (${client.userId}) connected`,
+      );
 
       // 온라인 상태를 다른 사용자들에게 알림
       this.server.emit('user_online', {
         userId: client.userId,
         userName: client.userInfo.name,
       });
-
     } catch (error) {
       this.logger.warn(`Connection rejected: Invalid token - ${error.message}`);
       client.disconnect();
@@ -95,8 +98,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleDisconnect(client: AuthenticatedSocket) {
     if (client.userId) {
       this.connectedUsers.delete(client.userId);
-      
-      this.logger.log(`User ${client.userInfo?.name} (${client.userId}) disconnected`);
+
+      this.logger.log(
+        `User ${client.userInfo?.name} (${client.userId}) disconnected`,
+      );
 
       // 오프라인 상태를 다른 사용자들에게 알림
       this.server.emit('user_offline', {
@@ -108,7 +113,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('send_message')
   async handleSendMessage(
-    @MessageBody() data: { chat_room_id: string; message_text: string; message_type?: string },
+    @MessageBody()
+    data: { chat_room_id: string; message_text: string; message_type?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
@@ -121,7 +127,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         chat_room_id: data.chat_room_id,
         sender_id: client.userId,
         message_text: data.message_text,
-        message_type: (data.message_type as 'text' | 'image' | 'system') || 'text',
+        message_type:
+          (data.message_type as 'text' | 'image' | 'system') || 'text',
       });
 
       // 채팅방의 모든 참여자에게 실시간 전송
@@ -188,23 +195,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!client.userId) {
         return { error: 'Not authenticated' };
       }
-      
+
       const rooms = await this.chatService.getChatRooms({
         user_id: client.userId,
         page: 1,
         limit: 100,
       });
 
-      const hasAccess = rooms.rooms.some(room => room.id === data.chat_room_id);
+      const hasAccess = rooms.rooms.some(
+        (room) => room.id === data.chat_room_id,
+      );
       if (!hasAccess) {
         return { error: 'Access denied to this chat room' };
       }
 
       // Socket.IO 룸에 조인
       await client.join(`room_${data.chat_room_id}`);
-      
-      this.logger.log(`User ${client.userInfo?.name} joined room ${data.chat_room_id}`);
-      
+
+      this.logger.log(
+        `User ${client.userInfo?.name} joined room ${data.chat_room_id}`,
+      );
+
       return { success: true };
     } catch (error) {
       this.logger.error(`Error joining room: ${error.message}`);
@@ -218,7 +229,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     await client.leave(`room_${data.chat_room_id}`);
-    this.logger.log(`User ${client.userInfo?.name} left room ${data.chat_room_id}`);
+    this.logger.log(
+      `User ${client.userInfo?.name} left room ${data.chat_room_id}`,
+    );
     return { success: true };
   }
 
@@ -256,7 +269,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!client.userId) {
         throw new Error('User ID not found');
       }
-      
+
       const rooms = await this.chatService.getChatRooms({
         user_id: client.userId,
         page: 1,
@@ -267,7 +280,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         await client.join(`room_${room.id}`);
       }
 
-      this.logger.log(`User ${client.userInfo?.name} joined ${rooms.rooms.length} chat rooms`);
+      this.logger.log(
+        `User ${client.userInfo?.name} joined ${rooms.rooms.length} chat rooms`,
+      );
     } catch (error) {
       this.logger.error(`Error joining user chat rooms: ${error.message}`);
     }

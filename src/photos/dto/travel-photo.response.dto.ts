@@ -15,7 +15,7 @@ export class TravelPhotoResponseDto {
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
-  
+
   // Optional computed fields
   distance?: number; // Distance from query point in kilometers
 

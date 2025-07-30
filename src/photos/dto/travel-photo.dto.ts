@@ -1,4 +1,13 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber, Min, Max, IsBoolean, IsDateString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsBoolean,
+  IsDateString,
+} from 'class-validator';
 
 export class UploadTravelPhotoDto {
   @IsString()

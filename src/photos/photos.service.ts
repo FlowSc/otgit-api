@@ -1,11 +1,30 @@
-import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '../config/supabase.config';
-import { UploadProfilePhotoDto, ProfilePhotoResponseDto } from './dto/profile-photo.dto';
-import { UploadTravelPhotoDto, UpdateTravelPhotoDto, QueryTravelPhotosDto, TravelPhotoResponseDto } from './dto/travel-photo.dto';
-import { FindNearbyUsersDto, FindNearbyUsersResponseDto, NearbyUserDto, NearbyUserPhotoDto } from './dto/nearby-users.dto';
+import {
+  UploadProfilePhotoDto,
+  ProfilePhotoResponseDto,
+} from './dto/profile-photo.dto';
+import {
+  UploadTravelPhotoDto,
+  UpdateTravelPhotoDto,
+  QueryTravelPhotosDto,
+  TravelPhotoResponseDto,
+} from './dto/travel-photo.dto';
+import {
+  FindNearbyUsersDto,
+  FindNearbyUsersResponseDto,
+  NearbyUserDto,
+  NearbyUserPhotoDto,
+} from './dto/nearby-users.dto';
 import { LikesService } from '../likes/likes.service';
+import { TicketsService } from '../tickets/tickets.service';
 
 @Injectable()
 export class PhotosService {
@@ -14,12 +33,17 @@ export class PhotosService {
   constructor(
     private configService: ConfigService,
     private likesService: LikesService,
+    private ticketsService: TicketsService,
   ) {
     this.supabase = createSupabaseClient(this.configService);
   }
 
   // Profile Photo Methods
-  async uploadProfilePhoto(userId: string, uploadDto: UploadProfilePhotoDto, file: Express.Multer.File): Promise<ProfilePhotoResponseDto> {
+  async uploadProfilePhoto(
+    userId: string,
+    uploadDto: UploadProfilePhotoDto,
+    file: Express.Multer.File,
+  ): Promise<ProfilePhotoResponseDto> {
     try {
       // Validate file
       if (!file) {
@@ -33,21 +57,24 @@ export class PhotosService {
 
       // Upload file to Supabase Storage (profile-photos bucket)
       const fileName = `${userId}/${Date.now()}-${file.originalname}`;
-      const { data: uploadData, error: uploadError } = await this.supabase.storage
-        .from('profile-photos')
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-          upsert: false
-        });
+      const { data: uploadData, error: uploadError } =
+        await this.supabase.storage
+          .from('profile-photos')
+          .upload(fileName, file.buffer, {
+            contentType: file.mimetype,
+            upsert: false,
+          });
 
       if (uploadError) {
-        throw new InternalServerErrorException('Failed to upload file to storage');
+        throw new InternalServerErrorException(
+          'Failed to upload file to storage',
+        );
       }
 
       // Get public URL
-      const { data: { publicUrl } } = this.supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = this.supabase.storage.from('profile-photos').getPublicUrl(fileName);
 
       // Deactivate existing profile photo
       await this.supabase
@@ -67,8 +94,8 @@ export class PhotosService {
             file_size: file.size,
             mime_type: file.mimetype,
             storage_path: fileName,
-            is_active: true
-          }
+            is_active: true,
+          },
         ])
         .select()
         .single();
@@ -76,19 +103,26 @@ export class PhotosService {
       if (error) {
         // Clean up uploaded file if database save fails
         await this.supabase.storage.from('profile-photos').remove([fileName]);
-        throw new InternalServerErrorException('Failed to save photo information');
+        throw new InternalServerErrorException(
+          'Failed to save photo information',
+        );
       }
 
       return data;
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException('Profile photo upload failed');
     }
   }
 
-  async getProfilePhoto(userId: string): Promise<ProfilePhotoResponseDto | null> {
+  async getProfilePhoto(
+    userId: string,
+  ): Promise<ProfilePhotoResponseDto | null> {
     try {
       const { data, error } = await this.supabase
         .from('profile_photos')
@@ -119,7 +153,9 @@ export class PhotosService {
 
       // Delete from storage
       if (existingPhoto.storage_path) {
-        await this.supabase.storage.from('profile-photos').remove([existingPhoto.storage_path]);
+        await this.supabase.storage
+          .from('profile-photos')
+          .remove([existingPhoto.storage_path]);
       }
 
       // Delete from database
@@ -129,12 +165,17 @@ export class PhotosService {
         .eq('id', existingPhoto.id);
 
       if (error) {
-        throw new InternalServerErrorException('Failed to delete profile photo');
+        throw new InternalServerErrorException(
+          'Failed to delete profile photo',
+        );
       }
 
       return { message: 'Profile photo deleted successfully' };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException('Profile photo deletion failed');
@@ -142,7 +183,11 @@ export class PhotosService {
   }
 
   // Travel Photo Methods
-  async uploadTravelPhoto(userId: string, uploadDto: UploadTravelPhotoDto, file: Express.Multer.File): Promise<TravelPhotoResponseDto> {
+  async uploadTravelPhoto(
+    userId: string,
+    uploadDto: UploadTravelPhotoDto,
+    file: Express.Multer.File,
+  ): Promise<TravelPhotoResponseDto> {
     try {
       // Validate file
       if (!file) {
@@ -156,21 +201,24 @@ export class PhotosService {
 
       // Upload file to Supabase Storage (travel-photos bucket)
       const fileName = `${userId}/${Date.now()}-${file.originalname}`;
-      const { data: uploadData, error: uploadError } = await this.supabase.storage
-        .from('travel-photos')
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-          upsert: false
-        });
+      const { data: uploadData, error: uploadError } =
+        await this.supabase.storage
+          .from('travel-photos')
+          .upload(fileName, file.buffer, {
+            contentType: file.mimetype,
+            upsert: false,
+          });
 
       if (uploadError) {
-        throw new InternalServerErrorException('Failed to upload file to storage');
+        throw new InternalServerErrorException(
+          'Failed to upload file to storage',
+        );
       }
 
       // Get public URL
-      const { data: { publicUrl } } = this.supabase.storage
-        .from('travel-photos')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = this.supabase.storage.from('travel-photos').getPublicUrl(fileName);
 
       // Save photo info to database
       const { data, error } = await this.supabase
@@ -189,8 +237,8 @@ export class PhotosService {
             description: uploadDto.description,
             location_name: uploadDto.location_name,
             taken_at: uploadDto.taken_at,
-            is_public: uploadDto.is_public ?? true
-          }
+            is_public: uploadDto.is_public ?? true,
+          },
         ])
         .select()
         .single();
@@ -198,21 +246,43 @@ export class PhotosService {
       if (error) {
         // Clean up uploaded file if database save fails
         await this.supabase.storage.from('travel-photos').remove([fileName]);
-        throw new InternalServerErrorException('Failed to save photo information');
+        throw new InternalServerErrorException(
+          'Failed to save photo information',
+        );
       }
 
       return data;
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException('Travel photo upload failed');
     }
   }
 
-  async getTravelPhotos(queryDto: QueryTravelPhotosDto): Promise<{ photos: TravelPhotoResponseDto[], total: number, page: number, limit: number }> {
+  async getTravelPhotos(queryDto: QueryTravelPhotosDto): Promise<{
+    photos: TravelPhotoResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     try {
-      const { page = 1, limit = 20, user_id, is_public, min_latitude, max_latitude, min_longitude, max_longitude, center_latitude, center_longitude, radius_km } = queryDto;
+      const {
+        page = 1,
+        limit = 20,
+        user_id,
+        is_public,
+        min_latitude,
+        max_latitude,
+        min_longitude,
+        max_longitude,
+        center_latitude,
+        center_longitude,
+        radius_km,
+      } = queryDto;
       const offset = (page - 1) * limit;
 
       let query = this.supabase
@@ -230,7 +300,12 @@ export class PhotosService {
       }
 
       // Bounding box search
-      if (min_latitude !== undefined && max_latitude !== undefined && min_longitude !== undefined && max_longitude !== undefined) {
+      if (
+        min_latitude !== undefined &&
+        max_latitude !== undefined &&
+        min_longitude !== undefined &&
+        max_longitude !== undefined
+      ) {
         query = query
           .gte('latitude', min_latitude)
           .lte('latitude', max_latitude)
@@ -240,10 +315,15 @@ export class PhotosService {
 
       // For radius search, we'll use a simple bounding box approximation
       // (For more accurate results, PostGIS extension would be ideal)
-      if (center_latitude !== undefined && center_longitude !== undefined && radius_km !== undefined) {
+      if (
+        center_latitude !== undefined &&
+        center_longitude !== undefined &&
+        radius_km !== undefined
+      ) {
         const latDelta = radius_km / 111; // Rough conversion: 1 degree ≈ 111 km
-        const lngDelta = radius_km / (111 * Math.cos(center_latitude * Math.PI / 180));
-        
+        const lngDelta =
+          radius_km / (111 * Math.cos((center_latitude * Math.PI) / 180));
+
         query = query
           .gte('latitude', center_latitude - latDelta)
           .lte('latitude', center_latitude + latDelta)
@@ -263,7 +343,7 @@ export class PhotosService {
         photos: data || [],
         total: count || 0,
         page,
-        limit
+        limit,
       };
     } catch (error) {
       if (error instanceof InternalServerErrorException) {
@@ -292,14 +372,21 @@ export class PhotosService {
 
       return data;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to get travel photo');
     }
   }
 
-  async updateTravelPhoto(photoId: string, userId: string, updateDto: UpdateTravelPhotoDto): Promise<TravelPhotoResponseDto> {
+  async updateTravelPhoto(
+    photoId: string,
+    userId: string,
+    updateDto: UpdateTravelPhotoDto,
+  ): Promise<TravelPhotoResponseDto> {
     try {
       // Verify ownership
       const existingPhoto = await this.getTravelPhoto(photoId);
@@ -328,14 +415,21 @@ export class PhotosService {
 
       return data;
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException || error instanceof NotFoundException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException('Travel photo update failed');
     }
   }
 
-  async deleteTravelPhoto(photoId: string, userId: string): Promise<{ message: string }> {
+  async deleteTravelPhoto(
+    photoId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
     try {
       // Verify ownership
       const existingPhoto = await this.getTravelPhoto(photoId);
@@ -355,7 +449,11 @@ export class PhotosService {
 
       return { message: 'Travel photo deleted successfully' };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException || error instanceof NotFoundException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException('Travel photo deletion failed');
@@ -363,22 +461,57 @@ export class PhotosService {
   }
 
   // 거리 계산 함수 (Haversine formula)
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
     const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Distance in km
   }
 
-  async findNearbyUsers(findNearbyUsersDto: FindNearbyUsersDto): Promise<FindNearbyUsersResponseDto> {
+  async findNearbyUsers(
+    findNearbyUsersDto: FindNearbyUsersDto,
+  ): Promise<FindNearbyUsersResponseDto> {
     try {
-      const { user_id, radius_km = 10, min_age, max_age, page = 1, limit = 20, include_profile_photo = true, include_travel_photos = true, include_direct_distance = true, include_last_location = false } = findNearbyUsersDto;
+      const {
+        user_id,
+        radius_km = 10,
+        min_age,
+        max_age,
+        page = 1,
+        limit = 20,
+        include_profile_photo = true,
+        include_travel_photos = true,
+        include_direct_distance = true,
+        include_last_location = false,
+      } = findNearbyUsersDto;
       const offset = (page - 1) * limit;
+
+      // 0. 티켓 확인 및 차감
+      const hasTickets = await this.ticketsService.hasEnoughTickets(user_id, 1);
+      if (!hasTickets) {
+        throw new BadRequestException(
+          'Insufficient tickets for search. Please purchase more tickets or claim your daily free ticket.',
+        );
+      }
+
+      // 티켓 사용 (검색 실행)
+      await this.ticketsService.useTicket({
+        user_id,
+        description: 'Used for nearby users search',
+        reference_id: undefined, // 필요시 검색 ID 생성해서 추가
+      });
 
       // 1. 검색 기준 사용자 정보 조회 (위치 정보 포함)
       const { data: searchUser, error: searchUserError } = await this.supabase
@@ -423,7 +556,8 @@ export class PhotosService {
       // 3. 다른 성별 사용자들의 여행 사진 조회 (나이 필터링 및 위치 정보 포함)
       let query = this.supabase
         .from('travel_photos')
-        .select(`
+        .select(
+          `
           id,
           user_id,
           file_url,
@@ -436,7 +570,8 @@ export class PhotosService {
           taken_at,
           created_at,
           users!inner(id, name, age, gender, last_latitude, last_longitude, last_location_name, last_location_updated_at)
-        `)
+        `,
+        )
         .eq('is_deleted', false)
         .eq('is_public', true)
         .eq('users.gender', targetGender)
@@ -458,15 +593,20 @@ export class PhotosService {
       const { data: otherUsersPhotos, error: otherPhotosError } = await query;
 
       if (otherPhotosError) {
-        throw new InternalServerErrorException('Failed to fetch other users photos');
+        throw new InternalServerErrorException(
+          'Failed to fetch other users photos',
+        );
       }
 
       // 4. 거리 계산 및 필터링
-      const nearbyUsersMap = new Map<string, {
-        user: any;
-        photos: any[];
-        distances: number[];
-      }>();
+      const nearbyUsersMap = new Map<
+        string,
+        {
+          user: any;
+          photos: any[];
+          distances: number[];
+        }
+      >();
 
       for (const otherPhoto of otherUsersPhotos || []) {
         let isNearby = false;
@@ -478,7 +618,7 @@ export class PhotosService {
             userPhoto.latitude,
             userPhoto.longitude,
             otherPhoto.latitude,
-            otherPhoto.longitude
+            otherPhoto.longitude,
           );
 
           if (distance <= radius_km) {
@@ -496,7 +636,7 @@ export class PhotosService {
               distances: [],
             });
           }
-          
+
           nearbyUsersMap.get(userId)!.photos.push(otherPhoto);
           nearbyUsersMap.get(userId)!.distances.push(minDistance);
         }
@@ -526,12 +666,18 @@ export class PhotosService {
 
           // 사용자 간 직접 거리 계산
           let directDistance: number | undefined = undefined;
-          if (include_direct_distance && searchUser.last_latitude && searchUser.last_longitude && user.last_latitude && user.last_longitude) {
+          if (
+            include_direct_distance &&
+            searchUser.last_latitude &&
+            searchUser.last_longitude &&
+            user.last_latitude &&
+            user.last_longitude
+          ) {
             directDistance = this.calculateDistance(
               searchUser.last_latitude,
               searchUser.last_longitude,
               user.last_latitude,
-              user.last_longitude
+              user.last_longitude,
             );
             directDistance = Math.round(directDistance * 100) / 100; // 소수점 2자리
           }
@@ -541,33 +687,40 @@ export class PhotosService {
             name: user.name,
             age: user.age,
             gender: user.gender,
-            profile_photo: profilePhoto ? {
-              id: profilePhoto.id,
-              file_url: profilePhoto.file_url,
-              file_name: profilePhoto.file_name,
-              created_at: profilePhoto.created_at,
-            } : undefined,
-            travel_photos: include_travel_photos ? data.photos.map(photo => ({
-              id: photo.id,
-              file_url: photo.file_url,
-              file_name: photo.file_name,
-              latitude: photo.latitude,
-              longitude: photo.longitude,
-              title: photo.title,
-              description: photo.description,
-              location_name: photo.location_name,
-              taken_at: photo.taken_at,
-              created_at: photo.created_at,
-            })) : [],
+            profile_photo: profilePhoto
+              ? {
+                  id: profilePhoto.id,
+                  file_url: profilePhoto.file_url,
+                  file_name: profilePhoto.file_name,
+                  created_at: profilePhoto.created_at,
+                }
+              : undefined,
+            travel_photos: include_travel_photos
+              ? data.photos.map((photo) => ({
+                  id: photo.id,
+                  file_url: photo.file_url,
+                  file_name: photo.file_name,
+                  latitude: photo.latitude,
+                  longitude: photo.longitude,
+                  title: photo.title,
+                  description: photo.description,
+                  location_name: photo.location_name,
+                  taken_at: photo.taken_at,
+                  created_at: photo.created_at,
+                }))
+              : [],
             common_locations_count: data.photos.length,
             closest_distance_km: Math.round(closestDistance * 100) / 100, // 소수점 2자리
             direct_distance_km: directDistance,
-            last_location: (include_last_location && user.last_latitude && user.last_longitude) ? {
-              latitude: user.last_latitude,
-              longitude: user.last_longitude,
-              location_name: user.last_location_name,
-              updated_at: user.last_location_updated_at,
-            } : undefined,
+            last_location:
+              include_last_location && user.last_latitude && user.last_longitude
+                ? {
+                    latitude: user.last_latitude,
+                    longitude: user.last_longitude,
+                    location_name: user.last_location_name,
+                    updated_at: user.last_location_updated_at,
+                  }
+                : undefined,
           };
         })
         .sort((a, b) => a.closest_distance_km - b.closest_distance_km); // 가까운 거리 순 정렬
@@ -588,14 +741,19 @@ export class PhotosService {
         limit,
         user_photos_count: userPhotos.length,
         search_radius_km: radius_km,
-        age_filter: (min_age !== undefined || max_age !== undefined) ? {
-          min_age,
-          max_age,
-        } : undefined,
+        age_filter:
+          min_age !== undefined || max_age !== undefined
+            ? {
+                min_age,
+                max_age,
+              }
+            : undefined,
       };
-
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       console.error('Find nearby users error:', error);
