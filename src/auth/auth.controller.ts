@@ -1,4 +1,5 @@
 import { Controller, Post, Body, ValidationPipe, Get, Query, Res, BadRequestException, Param } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -12,11 +13,13 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ short: { limit: 1, ttl: 1000 } }) // 1초에 1번만 허용
   async register(@Body(ValidationPipe) createUserDto: CreateUserDto) {
     return this.authService.register(createUserDto);
   }
 
   @Post('login')
+  @Throttle({ short: { limit: 2, ttl: 1000 } }) // 1초에 2번만 허용
   async login(@Body(ValidationPipe) loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -44,11 +47,13 @@ export class AuthController {
   }
 
   @Post('send-verification-code')
+  @Throttle({ short: { limit: 1, ttl: 1000 }, medium: { limit: 3, ttl: 60000 } }) // 1초에 1번, 1분에 3번
   async sendVerificationCode(@Body(ValidationPipe) sendVerificationCodeDto: SendVerificationCodeDto) {
     return this.authService.sendVerificationCode(sendVerificationCodeDto);
   }
 
   @Post('verify-phone')
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 5, ttl: 60000 } }) // 1초에 2번, 1분에 5번
   async verifyPhoneCode(@Body(ValidationPipe) verifyPhoneCodeDto: VerifyPhoneCodeDto) {
     return this.authService.verifyPhoneCode(verifyPhoneCodeDto);
   }

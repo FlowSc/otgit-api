@@ -110,7 +110,10 @@ export class AuthService {
       }
 
       // 자체 JWT 토큰 생성 (일반 로그인)
-      const jwtSecret = this.configService.get('JWT_SECRET') || 'your-secret-key';
+      const jwtSecret = this.configService.get('JWT_SECRET');
+      if (!jwtSecret) {
+        throw new InternalServerErrorException('JWT_SECRET is not configured');
+      }
       const payload = {
         sub: user.id,
         email: user.email,

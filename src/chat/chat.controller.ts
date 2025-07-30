@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Query, ValidationPipe, Param } from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { 
   CreateChatRoomDto, 
   ChatRoomResponseDto, 
@@ -12,7 +13,10 @@ import {
 
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
+  ) {}
 
   @Post('rooms')
   async createChatRoom(@Body(ValidationPipe) createChatRoomDto: CreateChatRoomDto): Promise<ChatRoomResponseDto> {
@@ -37,5 +41,25 @@ export class ChatController {
   @Post('mark-read')
   async markAsRead(@Body(ValidationPipe) markAsReadDto: MarkAsReadDto) {
     return this.chatService.markAsRead(markAsReadDto);
+  }
+
+  @Get('online-users')
+  async getOnlineUsers() {
+    const onlineUserIds = this.chatGateway.getOnlineUsers();
+    return {
+      success: true,
+      online_users: onlineUserIds,
+      count: onlineUserIds.length,
+    };
+  }
+
+  @Get('user/:userId/online')
+  async isUserOnline(@Param('userId') userId: string) {
+    const isOnline = this.chatGateway.isUserOnline(userId);
+    return {
+      success: true,
+      user_id: userId,
+      is_online: isOnline,
+    };
   }
 }
