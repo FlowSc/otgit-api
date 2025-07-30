@@ -2,6 +2,7 @@ import { Injectable, ConflictException, InternalServerErrorException, BadRequest
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto, SocialProvider } from './dto/social-login.dto';
@@ -104,40 +105,20 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      // Supabase Auth로 세션 생성 (이메일/비밀번호 인증)
-      const { data: authData, error: authError } = await this.supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // JWT 토큰 생성
+      const jwtSecret = this.configService.get('JWT_SECRET') || 'your-secret-key';
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        gender: user.gender,
+        age: user.age,
+        iat: Math.floor(Date.now() / 1000),
+      };
 
-      if (authError) {
-        // Supabase Auth에 사용자가 없으면 생성
-        if (authError.message.includes('Invalid login credentials')) {
-          const { data: signUpData, error: signUpError } = await this.supabase.auth.signUp({
-            email,
-            password,
-          });
-
-          if (signUpError) {
-            throw new InternalServerErrorException('Failed to create auth session');
-          }
-
-          return {
-            message: 'Login successful',
-            user: {
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              phone: user.phone,
-              gender: user.gender,
-              age: user.age,
-            },
-            access_token: signUpData.session?.access_token,
-            refresh_token: signUpData.session?.refresh_token,
-          };
-        }
-        throw new InternalServerErrorException('Authentication failed');
-      }
+      const accessToken = jwt.sign(payload, jwtSecret, { expiresIn: '1h' });
+      const refreshToken = jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: '7d' });
 
       return {
         message: 'Login successful',
@@ -149,8 +130,8 @@ export class AuthService {
           gender: user.gender,
           age: user.age,
         },
-        access_token: authData.session?.access_token,
-        refresh_token: authData.session?.refresh_token,
+        access_token: accessToken,
+        refresh_token: refreshToken,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) {
@@ -214,7 +195,7 @@ export class AuthService {
         throw new InternalServerErrorException('Failed to check existing user');
       }
 
-      let userData;
+      let userData: any;
       
       if (!existingUser) {
         // 새 사용자 생성 (소셜 로그인 사용자는 비밀번호 없음)
