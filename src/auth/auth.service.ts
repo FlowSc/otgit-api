@@ -46,7 +46,7 @@ export class AuthService {
       const saltRounds = 10;
       const passwordHash = await bcrypt.hash(password, saltRounds);
 
-      // Create user
+      // Create user profile in users table (일반 회원가입은 자체 시스템 사용)
       const { data, error } = await this.supabase
         .from('users')
         .insert([
@@ -57,14 +57,15 @@ export class AuthService {
             password_hash: passwordHash,
             gender,
             age,
-            phone_verified: false
+            phone_verified: false,
+            login_type: 'email'
           }
         ])
         .select('id, email, name, phone, gender, age, created_at')
         .single();
 
       if (error) {
-        throw new InternalServerErrorException('Failed to create user');
+        throw new InternalServerErrorException('Failed to create user profile');
       }
 
       return {
@@ -75,7 +76,8 @@ export class AuthService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      throw new InternalServerErrorException('Registration failed');
+      console.error('Registration error:', error);
+      throw new InternalServerErrorException(`Registration failed: ${error.message}`);
     }
   }
 
@@ -105,7 +107,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      // JWT 토큰 생성
+      // 자체 JWT 토큰 생성 (일반 로그인)
       const jwtSecret = this.configService.get('JWT_SECRET') || 'your-secret-key';
       const payload = {
         sub: user.id,
@@ -114,6 +116,7 @@ export class AuthService {
         phone: user.phone,
         gender: user.gender,
         age: user.age,
+        login_type: user.login_type,
         iat: Math.floor(Date.now() / 1000),
       };
 
@@ -129,6 +132,7 @@ export class AuthService {
           phone: user.phone,
           gender: user.gender,
           age: user.age,
+          login_type: user.login_type,
         },
         access_token: accessToken,
         refresh_token: refreshToken,
@@ -198,11 +202,16 @@ export class AuthService {
       let userData: any;
       
       if (!existingUser) {
+        // 소셜 로그인 제공자 확인
+        const provider = user.app_metadata?.provider || 'google';
+        const loginType = provider === 'apple' ? 'apple' : 'google';
+
         // 새 사용자 생성 (소셜 로그인 사용자는 비밀번호 없음)
         const { data: newUser, error: createError } = await this.supabase
           .from('users')
           .insert([
             {
+              id: user.id, // Supabase Auth user ID 사용
               email: user.email,
               name: user.user_metadata?.full_name || user.user_metadata?.name || 'User',
               password_hash: '', // 소셜 로그인 사용자는 비밀번호 없음
@@ -210,6 +219,7 @@ export class AuthService {
               gender: 'male', // 기본값, 나중에 프로필 업데이트에서 변경 가능
               age: 20, // 기본값, 나중에 프로필 업데이트에서 변경 가능
               phone_verified: !!user.phone_confirmed_at,
+              login_type: loginType,
             }
           ])
           .select()
