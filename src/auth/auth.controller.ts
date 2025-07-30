@@ -1,9 +1,10 @@
-import { Controller, Post, Body, ValidationPipe, Get, Query, Res } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, Query, Res, BadRequestException, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto } from './dto/social-login.dto';
 import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
+import { UpdateLocationDto, LocationResponseDto } from './dto/update-location.dto';
 import { Response } from 'express';
 
 @Controller('auth')
@@ -50,5 +51,21 @@ export class AuthController {
   @Post('verify-phone')
   async verifyPhoneCode(@Body(ValidationPipe) verifyPhoneCodeDto: VerifyPhoneCodeDto) {
     return this.authService.verifyPhoneCode(verifyPhoneCodeDto);
+  }
+
+  @Post('update-location')
+  async updateLocation(
+    @Body(ValidationPipe) updateLocationDto: UpdateLocationDto,
+  ): Promise<LocationResponseDto> {
+    const userId = updateLocationDto.user_id;
+    if (!userId) {
+      throw new BadRequestException('user_id is required');
+    }
+    return this.authService.updateUserLocation(userId, updateLocationDto);
+  }
+
+  @Get('location/:userId')
+  async getLocation(@Param('userId') userId: string): Promise<LocationResponseDto | null> {
+    return this.authService.getUserLocation(userId);
   }
 }

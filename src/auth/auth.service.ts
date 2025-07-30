@@ -7,6 +7,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto, SocialProvider } from './dto/social-login.dto';
 import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
+import { UpdateLocationDto, LocationResponseDto } from './dto/update-location.dto';
 import { createSupabaseClient } from '../config/supabase.config';
 
 @Injectable()
@@ -409,6 +410,85 @@ export class AuthService {
       }
       console.error('Verify phone code error:', error);
       throw new InternalServerErrorException('Phone verification failed');
+    }
+  }
+
+  // 사용자 위치 업데이트
+  async updateUserLocation(userId: string, updateLocationDto: UpdateLocationDto): Promise<LocationResponseDto> {
+    const { latitude, longitude, location_name } = updateLocationDto;
+
+    try {
+      // 사용자 존재 확인
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !user) {
+        throw new BadRequestException('User not found');
+      }
+
+      // 위치 정보 업데이트
+      const { data, error } = await this.supabase
+        .from('users')
+        .update({
+          last_latitude: latitude,
+          last_longitude: longitude,
+          last_location_name: location_name,
+          last_location_updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .select('last_latitude, last_longitude, last_location_name, last_location_updated_at')
+        .single();
+
+      if (error) {
+        throw new InternalServerErrorException('Failed to update user location');
+      }
+
+      return {
+        latitude: data.last_latitude,
+        longitude: data.last_longitude,
+        location_name: data.last_location_name,
+        updated_at: data.last_location_updated_at,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      console.error('Update location error:', error);
+      throw new InternalServerErrorException('Failed to update location');
+    }
+  }
+
+  // 사용자 위치 조회
+  async getUserLocation(userId: string): Promise<LocationResponseDto | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('last_latitude, last_longitude, last_location_name, last_location_updated_at')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to fetch user location');
+      }
+
+      if (!data || !data.last_latitude || !data.last_longitude) {
+        return null;
+      }
+
+      return {
+        latitude: data.last_latitude,
+        longitude: data.last_longitude,
+        location_name: data.last_location_name,
+        updated_at: data.last_location_updated_at,
+      };
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to get user location');
     }
   }
 }

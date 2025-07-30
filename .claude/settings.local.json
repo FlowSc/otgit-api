@@ -16,7 +16,12 @@
       "Bash(git push:*)",
       "mcp__supabase__search_docs",
       "Bash(npm uninstall:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(mkdir:*)",
+      "Bash(python3:*)",
+      "Bash(convert:*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   },
