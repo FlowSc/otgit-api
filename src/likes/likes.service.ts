@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '../config/supabase.config';
 import { SendLikeDto, LikeResponseDto, GetLikesDto, LikesListResponseDto, LikeWithUserDto, MatchResponseDto, GetMatchesDto, AcceptLikeDto, AcceptLikeResponseDto } from './dto/like.dto';
 import { ChatService } from '../chat/chat.service';
+import { NotificationsService, NotificationType } from '../notifications/notifications.service';
 
 @Injectable()
 export class LikesService {
@@ -12,6 +13,7 @@ export class LikesService {
   constructor(
     private configService: ConfigService,
     private chatService: ChatService,
+    private notificationsService: NotificationsService,
   ) {
     this.supabase = createSupabaseClient(this.configService);
   }
@@ -70,6 +72,71 @@ export class LikesService {
 
         if (!matchError) {
           isMatch = true;
+          
+          // 매칭 성공 시 양쪽 사용자에게 알림 전송
+          try {
+            // 발신자 정보 조회
+            const { data: sender } = await this.supabase
+              .from('users')
+              .select('name')
+              .eq('id', sender_id)
+              .single();
+
+            // 수신자 정보 조회  
+            const { data: receiver } = await this.supabase
+              .from('users')
+              .select('name')
+              .eq('id', receiver_id)
+              .single();
+
+            // 발신자에게 매칭 알림
+            await this.notificationsService.sendPushNotification({
+              userId: sender_id,
+              title: '새로운 매치! 🎉',
+              body: `${receiver?.name || 'Unknown'}님과 매치되었습니다!`,
+              data: {
+                matchedUserName: receiver?.name || 'Unknown',
+                matchedUserId: receiver_id,
+              },
+              type: NotificationType.NEW_MATCH,
+            });
+
+            // 수신자에게 매칭 알림
+            await this.notificationsService.sendPushNotification({
+              userId: receiver_id,
+              title: '새로운 매치! 🎉',
+              body: `${sender?.name || 'Unknown'}님과 매치되었습니다!`,
+              data: {
+                matchedUserName: sender?.name || 'Unknown',
+                matchedUserId: sender_id,
+              },
+              type: NotificationType.NEW_MATCH,
+            });
+          } catch (notificationError) {
+            console.error('Failed to send match notifications:', notificationError);
+          }
+        }
+      } else {
+        // 단순 좋아요인 경우 수신자에게만 알림
+        try {
+          // 발신자 정보 조회
+          const { data: sender } = await this.supabase
+            .from('users')
+            .select('name')
+            .eq('id', sender_id)
+            .single();
+
+          await this.notificationsService.sendPushNotification({
+            userId: receiver_id,
+            title: '누군가 당신을 좋아해요! ❤️',
+            body: '새로운 좋아요를 받았습니다.',
+            data: {
+              likedBy: sender?.name || 'Unknown',
+            },
+            type: NotificationType.NEW_LIKE,
+          });
+        } catch (notificationError) {
+          console.error('Failed to send like notification:', notificationError);
         }
       }
 

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, InternalServerErrorException, Forbidde
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '../config/supabase.config';
+import { NotificationsService, NotificationType } from '../notifications/notifications.service';
 import { 
   CreateChatRoomDto, 
   ChatRoomResponseDto, 
@@ -16,7 +17,10 @@ import {
 export class ChatService {
   private supabase: SupabaseClient;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private notificationsService: NotificationsService,
+  ) {
     this.supabase = createSupabaseClient(this.configService);
   }
 
@@ -274,6 +278,25 @@ export class ChatService {
         .eq('user_id', sender_id)
         .eq('is_active', true)
         .single();
+
+      // 상대방에게 푸시 알림 전송
+      const recipientId = chatRoom.user1_id === sender_id ? chatRoom.user2_id : chatRoom.user1_id;
+      try {
+        await this.notificationsService.sendPushNotification({
+          userId: recipientId,
+          title: sender?.name || '새 메시지',
+          body: message_text.length > 50 ? message_text.substring(0, 50) + '...' : message_text,
+          data: {
+            senderName: sender?.name || 'Unknown',
+            chatRoomId: chat_room_id,
+            senderId: sender_id,
+          },
+          type: NotificationType.CHAT_MESSAGE,
+        });
+      } catch (notificationError) {
+        console.error('Failed to send push notification:', notificationError);
+        // 알림 실패는 메시지 전송을 막지 않음
+      }
 
       return {
         id: message.id,

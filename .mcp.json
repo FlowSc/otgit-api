@@ -10,6 +10,13 @@
       "env": {
         "SUPABASE_ACCESS_TOKEN": "sbp_04cd2caab36a460ddd0260f934c618f699fed790"
       }
+    },
+    "firebase": {
+      "command": "npx",
+      "args": ["-y", "firebase-tools@latest", "experimental:mcp"],
+      "env": {
+        "SERVICE_ACCOUNT_KEY_PATH": "firebase-config.json"
+      }
     }
   }
 }

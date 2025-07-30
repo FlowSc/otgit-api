@@ -21,7 +21,8 @@
       "Bash(python3:*)",
       "Bash(convert:*)",
       "Bash(ls:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   },

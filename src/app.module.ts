@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { PhotosModule } from './photos/photos.module';
 import { LikesModule } from './likes/likes.module';
 import { ChatModule } from './chat/chat.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { FirebaseModule } from './config/firebase.module';
 
 @Module({
   imports: [
@@ -31,10 +33,12 @@ import { ChatModule } from './chat/chat.module';
         limit: 100, // 1분에 100번
       },
     ]),
+    FirebaseModule,
     AuthModule,
     PhotosModule,
     LikesModule,
-    ChatModule
+    ChatModule,
+    NotificationsModule
   ],
   controllers: [AppController],
   providers: [
