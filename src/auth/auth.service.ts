@@ -6,6 +6,7 @@ import * as jwt from 'jsonwebtoken';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto, SocialProvider } from './dto/social-login.dto';
+import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
 import { createSupabaseClient } from '../config/supabase.config';
 
 @Injectable()
@@ -247,6 +248,167 @@ export class AuthService {
         throw error;
       }
       throw new InternalServerErrorException('OAuth callback processing failed');
+    }
+  }
+
+  // 6자리 인증 코드 생성
+  private generateVerificationCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  // SMS 전송 (개발 환경에서는 모킹)
+  private async sendSMS(phone: string, code: string): Promise<void> {
+    // 개발 환경에서는 콘솔에 로그 출력
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📱 SMS to ${phone}: Your verification code is ${code}`);
+      return;
+    }
+
+    // TODO: 실제 SMS 서비스 연동 (예: AWS SNS, Twilio 등)
+    // await smsService.send(phone, `인증 코드: ${code}`);
+    throw new InternalServerErrorException('SMS service not configured for production');
+  }
+
+  async sendVerificationCode(sendVerificationCodeDto: SendVerificationCodeDto) {
+    const { phone } = sendVerificationCodeDto;
+
+    try {
+      // 해당 전화번호를 가진 사용자가 존재하는지 확인
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select('id, phone_verified')
+        .eq('phone', phone)
+        .single();
+
+      if (userError && userError.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check user');
+      }
+
+      if (!user) {
+        throw new BadRequestException('No user found with this phone number');
+      }
+
+      if (user.phone_verified) {
+        throw new BadRequestException('Phone number is already verified');
+      }
+
+      // 기존 미완료 인증 코드 무효화
+      await this.supabase
+        .from('phone_verifications')
+        .update({ verified: true }) // 만료 표시
+        .eq('phone', phone)
+        .eq('verified', false);
+
+      // 새 인증 코드 생성
+      const code = this.generateVerificationCode();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5분 후 만료
+
+      // 인증 코드 저장
+      const { error: saveError } = await this.supabase
+        .from('phone_verifications')
+        .insert([
+          {
+            phone,
+            code,
+            expires_at: expiresAt.toISOString(),
+          }
+        ]);
+
+      if (saveError) {
+        throw new InternalServerErrorException('Failed to save verification code');
+      }
+
+      // SMS 전송
+      await this.sendSMS(phone, code);
+
+      return {
+        message: 'Verification code sent successfully',
+        expires_in_minutes: 5,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('Send verification code error:', error);
+      throw new InternalServerErrorException('Failed to send verification code');
+    }
+  }
+
+  async verifyPhoneCode(verifyPhoneCodeDto: VerifyPhoneCodeDto) {
+    const { phone, code } = verifyPhoneCodeDto;
+
+    try {
+      // 유효한 인증 코드 찾기
+      const { data: verification, error: verificationError } = await this.supabase
+        .from('phone_verifications')
+        .select('*')
+        .eq('phone', phone)
+        .eq('code', code)
+        .eq('verified', false)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (verificationError && verificationError.code !== 'PGRST116') {
+        throw new InternalServerErrorException('Failed to check verification code');
+      }
+
+      if (!verification) {
+        // 시도 횟수 증가 (있다면)
+        const { data: currentVerification } = await this.supabase
+          .from('phone_verifications')
+          .select('attempts')
+          .eq('phone', phone)
+          .eq('verified', false)
+          .single();
+
+        if (currentVerification) {
+          await this.supabase
+            .from('phone_verifications')
+            .update({ 
+              attempts: (currentVerification.attempts || 0) + 1,
+              updated_at: new Date().toISOString()
+            })
+            .eq('phone', phone)
+            .eq('verified', false);
+        }
+
+        throw new BadRequestException('Invalid or expired verification code');
+      }
+
+      // 인증 코드를 검증됨으로 표시
+      await this.supabase
+        .from('phone_verifications')
+        .update({ 
+          verified: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', verification.id);
+
+      // 사용자의 phone_verified를 true로 업데이트
+      const { error: updateUserError } = await this.supabase
+        .from('users')
+        .update({ 
+          phone_verified: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('phone', phone);
+
+      if (updateUserError) {
+        throw new InternalServerErrorException('Failed to update user verification status');
+      }
+
+      return {
+        message: 'Phone number verified successfully',
+        verified: true,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('Verify phone code error:', error);
+      throw new InternalServerErrorException('Phone verification failed');
     }
   }
 }

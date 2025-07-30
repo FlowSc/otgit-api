@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto, SocialCallbackDto } from './dto/social-login.dto';
+import { SendVerificationCodeDto, VerifyPhoneCodeDto } from './dto/phone-verification.dto';
 import { Response } from 'express';
 
 @Controller('auth')
@@ -39,5 +40,15 @@ export class AuthController {
       const errorUrl = `${process.env.CLIENT_URL || 'otgit://'}auth/error?message=${encodeURIComponent(error.message)}`;
       return res.redirect(errorUrl);
     }
+  }
+
+  @Post('send-verification-code')
+  async sendVerificationCode(@Body(ValidationPipe) sendVerificationCodeDto: SendVerificationCodeDto) {
+    return this.authService.sendVerificationCode(sendVerificationCodeDto);
+  }
+
+  @Post('verify-phone')
+  async verifyPhoneCode(@Body(ValidationPipe) verifyPhoneCodeDto: VerifyPhoneCodeDto) {
+    return this.authService.verifyPhoneCode(verifyPhoneCodeDto);
   }
 }

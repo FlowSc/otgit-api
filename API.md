@@ -154,8 +154,63 @@ curl -X POST http://localhost:3000/auth/social-login \
   -d '{"provider":"google"}'
 ```
 
+### 5. 전화번호 인증 코드 전송
+```
+POST /auth/send-verification-code
+```
+
+**Request Body:**
+```json
+{
+  "phone": "010-1234-5678"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Verification code sent successfully",
+  "expires_in_minutes": 5
+}
+```
+
+### 6. 전화번호 인증 코드 검증
+```
+POST /auth/verify-phone
+```
+
+**Request Body:**
+```json
+{
+  "phone": "010-1234-5678",
+  "code": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Phone number verified successfully",
+  "verified": true
+}
+```
+
+## 사용 플로우
+
+### 일반 회원가입 플로우:
+1. `POST /auth/register` - 회원가입
+2. `POST /auth/send-verification-code` - 전화번호 인증 코드 전송
+3. `POST /auth/verify-phone` - 전화번호 인증 완료
+4. `POST /auth/login` - 로그인
+
+### 소셜 로그인 플로우:
+1. `POST /auth/social-login` - 소셜 로그인 URL 받기
+2. 사용자가 소셜 로그인 완료
+3. `GET /auth/callback` - OAuth 콜백 처리 (자동)
+4. 클라이언트 앱으로 리다이렉트
+
 ## 에러 코드
-- `400 Bad Request`: 잘못된 요청 데이터
+- `400 Bad Request`: 잘못된 요청 데이터, 잘못된 인증 코드
 - `401 Unauthorized`: 인증 실패
 - `409 Conflict`: 이미 존재하는 이메일 또는 전화번호
 - `500 Internal Server Error`: 서버 내부 오류
