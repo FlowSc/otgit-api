@@ -108,8 +108,8 @@ export class AcceptLikeDto {
   like_id: string;
 
   @IsString()
-  @IsNotEmpty()
-  user_id: string; // 좋아요를 받은 사용자 ID
+  @IsOptional()
+  receiver_id?: string; // JWT에서 가져올 예정
 }
 
 export class AcceptLikeResponseDto {

@@ -508,7 +508,7 @@ export class LikesService {
   async acceptLike(
     acceptLikeDto: AcceptLikeDto,
   ): Promise<AcceptLikeResponseDto> {
-    const { like_id, user_id } = acceptLikeDto;
+    const { like_id, receiver_id } = acceptLikeDto;
 
     try {
       // 좋아요 조회 및 권한 확인
@@ -523,7 +523,7 @@ export class LikesService {
       }
 
       // 받은 사용자가 맞는지 확인
-      if (like.receiver_id !== user_id) {
+      if (like.receiver_id !== receiver_id) {
         throw new BadRequestException('You can only accept likes sent to you');
       }
 

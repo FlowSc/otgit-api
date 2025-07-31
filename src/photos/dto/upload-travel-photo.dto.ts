@@ -2,30 +2,13 @@ import {
   IsNotEmpty,
   IsString,
   IsOptional,
-  IsInt,
-  Min,
-  IsDecimal,
   IsBoolean,
-  IsDateString,
   MaxLength,
   IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UploadTravelPhotoDto {
-  @IsNotEmpty()
-  @IsString()
-  fileName: string;
-
-  @IsNotEmpty()
-  @IsString()
-  mimeType: string;
-
-  @IsNotEmpty()
-  @IsInt()
-  @Min(1)
-  fileSize: number;
-
   // Required geolocation
   @IsNotEmpty()
   @IsNumber()
@@ -47,21 +30,16 @@ export class UploadTravelPhotoDto {
   @IsString()
   description?: string;
 
+  // Internal fields (will be removed from service layer)
   @IsOptional()
   @IsString()
-  @MaxLength(255)
-  locationName?: string;
+  file_name?: string;
 
   @IsOptional()
-  @IsDateString()
-  takenAt?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  @Type(() => Boolean)
-  isPublic?: boolean = true;
+  @IsNumber()
+  file_size?: number;
 
   @IsOptional()
   @IsString()
-  storagePath?: string; // Will be set by the service
+  mime_type?: string;
 }

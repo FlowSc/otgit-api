@@ -96,35 +96,35 @@ export class NCPSMSService {
         requestBody.content = '인증번호 안내';
       }
 
-      const response = await axios.post(
-        `${this.baseUrl}${url}`,
-        requestBody,
-        {
-          headers: {
-            'Content-Type': 'application/json; charset=utf-8',
-            'x-ncp-apigw-timestamp': timestamp,
-            'x-ncp-iam-access-key': accessKey,
-            'x-ncp-apigw-signature-v2': signature,
-          },
-          timeout: 10000, // 10초 타임아웃
+      const response = await axios.post(`${this.baseUrl}${url}`, requestBody, {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'x-ncp-apigw-timestamp': timestamp,
+          'x-ncp-iam-access-key': accessKey,
+          'x-ncp-apigw-signature-v2': signature,
         },
-      );
+        timeout: 10000, // 10초 타임아웃
+      });
 
       return response.data as NCPSMSResponse;
     } catch (error) {
       console.error('NCP SMS send error:', error);
-      
+
       if (axios.isAxiosError(error)) {
-        const errorMessage = error.response?.data?.errorMessage || error.message;
+        const errorMessage =
+          error.response?.data?.errorMessage || error.message;
         const statusCode = error.response?.status || 500;
         throw new Error(`NCP SMS API Error (${statusCode}): ${errorMessage}`);
       }
-      
+
       throw new Error(`Failed to send SMS: ${error.message}`);
     }
   }
 
-  async sendVerificationCode(phoneNumber: string, code: string): Promise<NCPSMSResponse> {
+  async sendVerificationCode(
+    phoneNumber: string,
+    code: string,
+  ): Promise<NCPSMSResponse> {
     const message = `[OTGIT] 인증번호는 ${code}입니다. 5분 내에 입력해주세요.`;
     return this.sendSMS(phoneNumber, message, 'SMS');
   }

@@ -12,6 +12,7 @@ import {
   UploadedFile,
   BadRequestException,
   Request,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PhotosService } from './photos.service';
@@ -29,6 +30,7 @@ import {
   FindNearbyUsersDto,
   FindNearbyUsersResponseDto,
 } from './dto/nearby-users.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('photos')
 export class PhotosController {
@@ -36,6 +38,7 @@ export class PhotosController {
 
   // Profile Photo Endpoints
   @Post('profile')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
@@ -54,11 +57,9 @@ export class PhotosController {
   )
   async uploadProfilePhoto(
     @UploadedFile() file: Express.Multer.File,
-    @Body('user_id') userId: string, // TODO: Replace with JWT auth
+    @Request() req: any,
   ): Promise<ProfilePhotoResponseDto> {
-    if (!userId) {
-      throw new BadRequestException('user_id is required');
-    }
+    const userId = req.user.userId;
 
     const uploadDto: UploadProfilePhotoDto = {
       file_name: file.originalname,
@@ -76,15 +77,16 @@ export class PhotosController {
     return this.photosService.getProfilePhoto(userId);
   }
 
-  @Delete('profile/:userId')
-  async deleteProfilePhoto(
-    @Param('userId') userId: string,
-  ): Promise<{ message: string }> {
+  @Delete('profile')
+  @UseGuards(JwtAuthGuard)
+  async deleteProfilePhoto(@Request() req: any): Promise<{ message: string }> {
+    const userId = req.user.userId;
     return this.photosService.deleteProfilePhoto(userId);
   }
 
   // Travel Photo Endpoints
   @Post('travel')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
@@ -104,26 +106,23 @@ export class PhotosController {
   async uploadTravelPhoto(
     @UploadedFile() file: Express.Multer.File,
     @Body(ValidationPipe) body: any, // We'll parse this manually due to multipart form
+    @Request() req: any,
   ): Promise<TravelPhotoResponseDto> {
+    // Get user ID from JWT token
+    const userId = req.user.userId;
+
     // Parse and validate the body data
     const uploadDto: UploadTravelPhotoDto = {
-      file_name: file.originalname,
-      file_size: file.size,
-      mime_type: file.mimetype,
       latitude: parseFloat(body.latitude),
       longitude: parseFloat(body.longitude),
       title: body.title,
       description: body.description,
-      location_name: body.location_name,
-      taken_at: body.taken_at,
-      is_public:
-        body.is_public !== undefined ? body.is_public === 'true' : true,
+      file_name: file.originalname,
+      file_size: file.size,
+      mime_type: file.mimetype,
     };
 
     // Validate required fields
-    if (!body.user_id) {
-      throw new BadRequestException('user_id is required');
-    }
     if (
       isNaN(uploadDto.latitude) ||
       uploadDto.latitude < -90 ||
@@ -141,19 +140,22 @@ export class PhotosController {
       );
     }
 
-    return this.photosService.uploadTravelPhoto(body.user_id, uploadDto, file);
+    return this.photosService.uploadTravelPhoto(userId, uploadDto, file);
   }
 
   @Get('travel')
+  @UseGuards(JwtAuthGuard)
   async getTravelPhotos(
     @Query(ValidationPipe) queryDto: QueryTravelPhotosDto,
+    @Request() req: any,
   ): Promise<{
     photos: TravelPhotoResponseDto[];
     total: number;
     page: number;
     limit: number;
   }> {
-    return this.photosService.getTravelPhotos(queryDto);
+    const userId = req.user.userId;
+    return this.photosService.getUserTravelPhotos(userId, queryDto);
   }
 
   @Get('travel/:photoId')
@@ -164,27 +166,23 @@ export class PhotosController {
   }
 
   @Put('travel/:photoId')
+  @UseGuards(JwtAuthGuard)
   async updateTravelPhoto(
     @Param('photoId') photoId: string,
     @Body(ValidationPipe) updateDto: UpdateTravelPhotoDto,
-    @Body('user_id') userId: string, // TODO: Replace with JWT auth
+    @Request() req: any,
   ): Promise<TravelPhotoResponseDto> {
-    if (!userId) {
-      throw new BadRequestException('user_id is required');
-    }
-
+    const userId = req.user.userId;
     return this.photosService.updateTravelPhoto(photoId, userId, updateDto);
   }
 
   @Delete('travel/:photoId')
+  @UseGuards(JwtAuthGuard)
   async deleteTravelPhoto(
     @Param('photoId') photoId: string,
-    @Body('user_id') userId: string, // TODO: Replace with JWT auth
+    @Request() req: any,
   ): Promise<{ message: string }> {
-    if (!userId) {
-      throw new BadRequestException('user_id is required');
-    }
-
+    const userId = req.user.userId;
     return this.photosService.deleteTravelPhoto(photoId, userId);
   }
 

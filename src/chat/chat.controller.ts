@@ -6,6 +6,8 @@ import {
   Query,
   ValidationPipe,
   Param,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
@@ -18,6 +20,7 @@ import {
   GetMessagesDto,
   MarkAsReadDto,
 } from './dto/chat.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('chat')
 export class ChatController {
@@ -27,32 +30,57 @@ export class ChatController {
   ) {}
 
   @Post('rooms')
+  @UseGuards(JwtAuthGuard)
   async createChatRoom(
     @Body(ValidationPipe) createChatRoomDto: CreateChatRoomDto,
+    @Request() req: any,
   ): Promise<ChatRoomResponseDto> {
     return this.chatService.createChatRoom(createChatRoomDto);
   }
 
   @Get('rooms')
-  async getChatRooms(@Query(ValidationPipe) getChatRoomsDto: GetChatRoomsDto) {
-    return this.chatService.getChatRooms(getChatRoomsDto);
+  @UseGuards(JwtAuthGuard)
+  async getChatRooms(
+    @Query(ValidationPipe) getChatRoomsDto: GetChatRoomsDto,
+    @Request() req: any,
+  ) {
+    const userId = req.user.userId;
+    return this.chatService.getChatRooms({
+      ...getChatRoomsDto,
+      user_id: userId,
+    });
   }
 
   @Post('messages')
+  @UseGuards(JwtAuthGuard)
   async sendMessage(
     @Body(ValidationPipe) sendMessageDto: SendMessageDto,
+    @Request() req: any,
   ): Promise<MessageResponseDto> {
-    return this.chatService.sendMessage(sendMessageDto);
+    const senderId = req.user.userId;
+    return this.chatService.sendMessage({
+      ...sendMessageDto,
+      sender_id: senderId,
+    });
   }
 
   @Get('messages')
-  async getMessages(@Query(ValidationPipe) getMessagesDto: GetMessagesDto) {
+  @UseGuards(JwtAuthGuard)
+  async getMessages(
+    @Query(ValidationPipe) getMessagesDto: GetMessagesDto,
+    @Request() req: any,
+  ) {
     return this.chatService.getMessages(getMessagesDto);
   }
 
   @Post('mark-read')
-  async markAsRead(@Body(ValidationPipe) markAsReadDto: MarkAsReadDto) {
-    return this.chatService.markAsRead(markAsReadDto);
+  @UseGuards(JwtAuthGuard)
+  async markAsRead(
+    @Body(ValidationPipe) markAsReadDto: MarkAsReadDto,
+    @Request() req: any,
+  ) {
+    const userId = req.user.userId;
+    return this.chatService.markAsRead({ ...markAsReadDto, user_id: userId });
   }
 
   @Get('online-users')

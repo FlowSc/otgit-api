@@ -7,6 +7,8 @@ import {
   Param,
   ValidationPipe,
   Delete,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
@@ -21,6 +23,7 @@ import {
   PushTokensResponseDto,
   NotificationHistoryDto,
 } from './dto/notifications.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -35,12 +38,15 @@ export class NotificationsController {
 
   // FCM 토큰 등록
   @Post('register-token')
+  @UseGuards(JwtAuthGuard)
   @Throttle({ short: { limit: 2, ttl: 1000 } }) // 1초에 2번만 허용
   async registerToken(
     @Body(ValidationPipe) registerTokenDto: RegisterTokenDto,
+    @Request() req: any,
   ) {
+    const userId = req.user.userId;
     const success = await this.notificationsService.registerToken(
-      registerTokenDto.user_id,
+      userId,
       registerTokenDto.token,
       registerTokenDto.device_type,
       registerTokenDto.device_id,
@@ -57,12 +63,15 @@ export class NotificationsController {
 
   // FCM 토큰 비활성화
   @Post('deactivate-token')
+  @UseGuards(JwtAuthGuard)
   @Throttle({ short: { limit: 3, ttl: 1000 } }) // 1초에 3번만 허용
   async deactivateToken(
     @Body(ValidationPipe) deactivateTokenDto: DeactivateTokenDto,
+    @Request() req: any,
   ) {
+    const userId = req.user.userId;
     const success = await this.notificationsService.deactivateToken(
-      deactivateTokenDto.user_id,
+      userId,
       deactivateTokenDto.token,
       deactivateTokenDto.device_id,
     );
@@ -97,11 +106,13 @@ export class NotificationsController {
     };
   }
 
-  // 알림 설정 조회
-  @Get('settings/:userId')
+  // 알림 설정 조회 (본인만)
+  @Get('settings')
+  @UseGuards(JwtAuthGuard)
   async getNotificationSettings(
-    @Param('userId') userId: string,
+    @Request() req: any,
   ): Promise<NotificationSettingsResponseDto> {
+    const userId = req.user.userId;
     try {
       const { data: settings, error } = await this.supabase
         .from('notification_settings')
@@ -156,10 +167,13 @@ export class NotificationsController {
 
   // 알림 설정 업데이트
   @Post('settings')
+  @UseGuards(JwtAuthGuard)
   @Throttle({ short: { limit: 5, ttl: 1000 } }) // 1초에 5번만 허용
   async updateNotificationSettings(
     @Body(ValidationPipe) updateSettingsDto: UpdateNotificationSettingsDto,
+    @Request() req: any,
   ): Promise<NotificationSettingsResponseDto> {
+    const userId = req.user.userId;
     const updateData: any = {};
     if (updateSettingsDto.new_messages !== undefined)
       updateData.new_messages = updateSettingsDto.new_messages;
@@ -175,7 +189,7 @@ export class NotificationsController {
     const { data: settings, error } = await this.supabase
       .from('notification_settings')
       .upsert({
-        user_id: updateSettingsDto.user_id,
+        user_id: userId,
         ...updateData,
       })
       .select()
@@ -188,11 +202,11 @@ export class NotificationsController {
     return settings;
   }
 
-  // 사용자의 등록된 토큰 목록 조회
-  @Get('tokens/:userId')
-  async getUserTokens(
-    @Param('userId') userId: string,
-  ): Promise<PushTokensResponseDto[]> {
+  // 사용자의 등록된 토큰 목록 조회 (본인만)
+  @Get('tokens')
+  @UseGuards(JwtAuthGuard)
+  async getUserTokens(@Request() req: any): Promise<PushTokensResponseDto[]> {
+    const userId = req.user.userId;
     const { data: tokens, error } = await this.supabase
       .from('push_tokens')
       .select('*')
@@ -207,10 +221,11 @@ export class NotificationsController {
     return tokens || [];
   }
 
-  // 알림 히스토리 조회
-  @Get('history/:userId')
+  // 알림 히스토리 조회 (본인만)
+  @Get('history')
+  @UseGuards(JwtAuthGuard)
   async getNotificationHistory(
-    @Param('userId') userId: string,
+    @Request() req: any,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
   ): Promise<{
@@ -219,6 +234,7 @@ export class NotificationsController {
     page: number;
     limit: number;
   }> {
+    const userId = req.user.userId;
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     const offset = (pageNum - 1) * limitNum;

@@ -210,6 +210,73 @@ export class AuthService {
     }
   }
 
+  async tokenLogin(access_token: string) {
+    try {
+      // JWT 토큰 검증
+      const jwtSecret = this.configService.get<string>('JWT_SECRET');
+      if (!jwtSecret) {
+        throw new InternalServerErrorException('JWT secret not configured');
+      }
+
+      const decoded = jwt.verify(access_token, jwtSecret) as any;
+      const userId = decoded.sub;
+
+      if (!userId) {
+        throw new UnauthorizedException('Invalid token: missing user ID');
+      }
+
+      // 사용자 정보 조회
+      const { data: user, error } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error || !user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // 새로운 토큰 발급 (토큰 갱신)
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        name: user.name,
+        login_type: user.login_type,
+      };
+
+      const newAccessToken = jwt.sign(payload, jwtSecret, { expiresIn: '1h' });
+      const newRefreshToken = jwt.sign({ sub: user.id }, jwtSecret, {
+        expiresIn: '7d',
+      });
+
+      return {
+        message: 'Token login successful',
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          gender: user.gender,
+          age: user.age,
+          login_type: user.login_type,
+        },
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken,
+      };
+    } catch (error) {
+      if (error instanceof jwt.JsonWebTokenError) {
+        throw new UnauthorizedException('Invalid token');
+      }
+      if (error instanceof jwt.TokenExpiredError) {
+        throw new UnauthorizedException('Token expired');
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Token login failed');
+    }
+  }
+
   async socialLogin(socialLoginDto: SocialLoginDto) {
     const { provider, redirectTo } = socialLoginDto;
 
@@ -342,7 +409,9 @@ export class AuthService {
     try {
       // 개발 환경에서는 콘솔 로그와 함께 실제 SMS도 전송
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`📱 [DEV] SMS to ${phone}: Your verification code is ${code}`);
+        console.log(
+          `📱 [DEV] SMS to ${phone}: Your verification code is ${code}`,
+        );
       }
 
       // 전화번호 형식 검증
@@ -352,10 +421,13 @@ export class AuthService {
 
       // 전화번호 정규화
       const normalizedPhone = this.ncpSmsService.normalizePhoneNumber(phone);
-      
+
       // NCP SMS API를 통해 인증번호 전송
-      const result = await this.ncpSmsService.sendVerificationCode(normalizedPhone, code);
-      
+      const result = await this.ncpSmsService.sendVerificationCode(
+        normalizedPhone,
+        code,
+      );
+
       console.log(`✅ SMS sent successfully to ${normalizedPhone}:`, {
         requestId: result.requestId,
         statusCode: result.statusCode,
@@ -363,19 +435,23 @@ export class AuthService {
       });
     } catch (error) {
       console.error('SMS send error:', error);
-      
+
       // NCP API 에러인 경우 구체적인 에러 메시지 제공
       if (error.message?.includes('NCP SMS API Error')) {
-        throw new InternalServerErrorException(`SMS 전송 실패: ${error.message}`);
+        throw new InternalServerErrorException(
+          `SMS 전송 실패: ${error.message}`,
+        );
       }
-      
+
       // 전화번호 형식 오류
       if (error instanceof BadRequestException) {
         throw error;
       }
-      
+
       // 기타 에러
-      throw new InternalServerErrorException('SMS 전송 중 오류가 발생했습니다.');
+      throw new InternalServerErrorException(
+        'SMS 전송 중 오류가 발생했습니다.',
+      );
     }
   }
 
@@ -906,6 +982,67 @@ export class AuthService {
       }
       console.error('Update profile error:', error);
       throw new InternalServerErrorException('Failed to update profile');
+    }
+  }
+
+  // 사용자 프로필과 여행사진 조회
+  async getUserProfileWithPhotos(userId: string) {
+    try {
+      // 사용자 기본 정보 조회
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select(
+          `
+          id, email, name, phone, gender, age, 
+          mbti, personality, job, bio,
+          last_latitude, last_longitude, last_location_name,
+          created_at, updated_at
+        `,
+        )
+        .eq('id', userId)
+        .single();
+
+      if (userError || !user) {
+        throw new BadRequestException('User not found');
+      }
+
+      // 프로필 사진 조회
+      const { data: profilePhoto, error: profileError } = await this.supabase
+        .from('profile_photos')
+        .select('id, file_url, created_at')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .single();
+
+      // 여행 사진 조회 (최신순)
+      const { data: travelPhotos, error: travelError } = await this.supabase
+        .from('travel_photos')
+        .select(
+          `
+          id, file_url, latitude, longitude, title, description, created_at
+        `,
+        )
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (travelError) {
+        console.error('Travel photos fetch error:', travelError);
+      }
+
+      return {
+        user: {
+          ...user,
+          profile_photo: profilePhoto || null,
+        },
+        travel_photos: travelPhotos || [],
+        travel_photos_count: travelPhotos?.length || 0,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('Get user profile with photos error:', error);
+      throw new InternalServerErrorException('Failed to get user profile');
     }
   }
 }

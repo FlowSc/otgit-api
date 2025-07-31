@@ -9,6 +9,9 @@ import {
   BadRequestException,
   Param,
   Put,
+  Headers,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -25,6 +28,7 @@ import {
   LocationResponseDto,
 } from './dto/update-location.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import { Response } from 'express';
 
 @Controller('auth')
@@ -41,6 +45,21 @@ export class AuthController {
   @Throttle({ short: { limit: 2, ttl: 1000 } }) // 1초에 2번만 허용
   async login(@Body(ValidationPipe) loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('token-login')
+  @Throttle({ short: { limit: 5, ttl: 1000 } }) // 1초에 5번만 허용
+  async tokenLogin(@Headers('authorization') authorization: string) {
+    if (!authorization) {
+      throw new BadRequestException('Authorization header is required');
+    }
+
+    const token = authorization.replace('Bearer ', '');
+    if (!token) {
+      throw new BadRequestException('Bearer token is required');
+    }
+
+    return this.authService.tokenLogin(token);
   }
 
   @Post('social-login')
@@ -116,13 +135,12 @@ export class AuthController {
   }
 
   @Post('update-location')
+  @UseGuards(JwtAuthGuard)
   async updateLocation(
     @Body(ValidationPipe) updateLocationDto: UpdateLocationDto,
+    @Request() req: any,
   ): Promise<LocationResponseDto> {
-    const userId = updateLocationDto.user_id;
-    if (!userId) {
-      throw new BadRequestException('user_id is required');
-    }
+    const userId = req.user.userId;
     return this.authService.updateUserLocation(userId, updateLocationDto);
   }
 
@@ -155,16 +173,32 @@ export class AuthController {
     return this.authService.checkNameDuplicate(checkNameDto);
   }
 
-  // 프로필 업데이트
-  @Put('profile/:userId')
+  // 프로필 업데이트 (본인만)
+  @Put('profile')
+  @UseGuards(JwtAuthGuard)
   @Throttle({
     short: { limit: 2, ttl: 1000 },
     medium: { limit: 10, ttl: 60000 },
   }) // 1초에 2번, 1분에 10번
   async updateProfile(
-    @Param('userId') userId: string,
     @Body(ValidationPipe) updateProfileDto: UpdateProfileDto,
+    @Request() req: any,
   ) {
+    const userId = req.user.userId;
     return this.authService.updateProfile(userId, updateProfileDto);
+  }
+
+  // 내 프로필 조회 (여행사진 포함)
+  @Get('profile/me')
+  @UseGuards(JwtAuthGuard)
+  async getMyProfile(@Request() req: any) {
+    const userId = req.user.userId;
+    return this.authService.getUserProfileWithPhotos(userId);
+  }
+
+  // 특정 사용자 프로필 조회 (여행사진 포함)
+  @Get('profile/:userId')
+  async getUserProfile(@Param('userId') userId: string) {
+    return this.authService.getUserProfileWithPhotos(userId);
   }
 }

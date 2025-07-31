@@ -227,17 +227,10 @@ export class PhotosService {
           {
             user_id: userId,
             file_url: publicUrl,
-            file_name: file.originalname,
-            file_size: file.size,
-            mime_type: file.mimetype,
-            storage_path: fileName,
             latitude: uploadDto.latitude,
             longitude: uploadDto.longitude,
             title: uploadDto.title,
             description: uploadDto.description,
-            location_name: uploadDto.location_name,
-            taken_at: uploadDto.taken_at,
-            is_public: uploadDto.is_public ?? true,
           },
         ])
         .select()
@@ -260,6 +253,51 @@ export class PhotosService {
         throw error;
       }
       throw new InternalServerErrorException('Travel photo upload failed');
+    }
+  }
+
+  // 사용자별 여행사진 조회 (본인 것만)
+  async getUserTravelPhotos(
+    userId: string,
+    queryDto: QueryTravelPhotosDto,
+  ): Promise<{
+    photos: TravelPhotoResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    try {
+      const { page = 1, limit = 20 } = queryDto;
+      const offset = (page - 1) * limit;
+
+      const {
+        data: photos,
+        error,
+        count,
+      } = await this.supabase
+        .from('travel_photos')
+        .select('*', { count: 'exact' })
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        throw new InternalServerErrorException('Failed to fetch travel photos');
+      }
+
+      return {
+        photos: photos || [],
+        total: count || 0,
+        page,
+        limit,
+      };
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to get user travel photos',
+      );
     }
   }
 
